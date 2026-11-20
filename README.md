@@ -397,7 +397,7 @@ The queries are available in the repository:
 
 **Business Question:** Which product categories are generating actual profit?
 
-📸 *`screenshots/05_q01_category_margin.png`*
+📸 ![SS](screenshots/05_q01_category_margin.png)
 
 > **Finding:** Only 3 of 17 sub-categories have negative margin — **Tables −$17,725 (−8.56%)**, **Bookcases −$3,473 (−3.02%)**, **Supplies −$1,189 (−2.55%)**. Machines posts $189K sales but only **1.79%** margin. Largest profits: **Copiers $55,618 (37.2%)**, Phones $44,516, Accessories $41,937.
 > **Means:** Revenue rankings hide loss-makers. Any category review must start with margin, not sales.
@@ -408,7 +408,7 @@ The queries are available in the repository:
 
 **Business Question:** Which geographical regions contribute the most profit?
 
-📸 *`screenshots/05_q02_region_performance.png`*
+📸 ![SS](screenshots/05_q02_region_performance.png)
 
 > **Finding:** **West** leads on profit (**$108,418**, margin **14.94%**). **Central** is weakest on both profit (**$39,706**) and margin (**7.92%**) despite $501K sales — South sells less ($392K) but earns more profit ($46,749).
 > **Means:** High regional sales ≠ regional profit. Discount depth and mix differ by region.
@@ -419,7 +419,7 @@ The queries are available in the repository:
 
 **Business Question:** Which months generate the highest sales, and when does the business experience the biggest declines?
 
-📸 *`screenshots/05_q03_monthly_trend.png`* • *`screenshots/05_q03b_peak_and_drop_months.png`*
+📸 ![SS](screenshots/05_q03_monthly_trend.png) | 📸 ![SS](screenshots/05_q03b_peak_and_drop_months.png)
 
 > **Finding:** Strongest individual months: **Nov 2017 ($118,448)**, **Dec 2016 ($96,999)**, **Sep 2017 ($87,867)**. Steepest MoM drops: **Jan 2016 (−75.3%)**, **Jan 2015 (−73.9%)**, **Feb 2014 (−68.3%)**. Across all years, calendar peaks sit in **Sep / Nov / Dec**; troughs in **Jan–Feb**.
 > **Means:** Demand is seasonal — plan stock and campaigns for Sep–Dec, expect the post-peak slide in January.
@@ -430,7 +430,7 @@ The queries are available in the repository:
 
 **Business Question:** How much discount can the business offer before profitability becomes a problem?
 
-📸 *`screenshots/05_q04_discount_impact.png`*
+📸 ![SS](screenshots/05_q04_discount_impact.png)
 
 > **Finding:** Margin stays positive at 0% (**+29.5%**) and 1–20% (**+11.9%**), then turns negative at **−15.3%** (21–40%) and **−77.4%** (>40%). The >40% band alone destroys **$99,559** across 933 lines.
 > **Means:** 🚨 Clear discount threshold — beyond 20%, each sale destroys value.
@@ -441,7 +441,7 @@ The queries are available in the repository:
 
 **Business Question:** Which sub-categories are responsible for the overall losses?
 
-📸 *`screenshots/05_q05_loss_subcategories.png`*
+📸 ![SS](screenshots/05_q05_loss_subcategories.png)
 
 > **Finding:** **Tables −$17,725**, **Bookcases −$3,473**, **Supplies −$1,189**. Combined loss **−$22,387**; Tables alone ≈ 79% of it.
 > **Means:** A short, named list of loss drivers — actionable by a category manager on Monday morning.
@@ -452,7 +452,7 @@ The queries are available in the repository:
 
 **Business Question:** Are the highest-selling products also the most profitable?
 
-📸 *`screenshots/05_q06_top_products.png`*
+📸 ![SS](screenshots/05_q06_top_products.png)
 
 > **Finding:** 4 of the 9 top-sellers by revenue earn **zero or negative** profit. All three top Furniture products: **$0, −$670, −$327**. Technology’s #2 seller (Cisco TelePresence EX90) loses **−$1,811**. Top seller overall — Canon imageCLASS 2200 Copier — earns **$25,200 at 40.9%** margin.
 > **Means:** Best-sellers must be cross-checked against margin before being promoted further.
@@ -463,7 +463,7 @@ The queries are available in the repository:
 
 **Business Question:** Is sales growth translating into profit growth?
 
-📸 *`screenshots/05_q07_yoy_trend.png`*
+📸 ![SS](screenshots/05_q07_yoy_trend.png)
 
 > **Finding:** Sales grew from **$484K (2014)** to **$733K (2017)** — about **+51%**. Profit grew from **$50K to $93K** — about **+89%**. Margin rose 10.2% → 12.7% over the period, peaking at **13.4% in 2016** before slipping to **12.7% in 2017** (when profit growth +14% lagged sales growth +20%). 2015 is the interesting year: sales fell **−2.8%** while profit rose **+24.4%**.
 > **Means:** The business scaled profitably overall — but 2017’s margin slip flags that recent growth is less efficient. Volume growth alone is not the full success story; discount discipline still decides whether growth converts to profit.
@@ -474,7 +474,7 @@ The queries are available in the repository:
 
 **Business Question:** How much profit is associated with transactions receiving discounts above 20%?
 
-📸 *`screenshots/05_q08_discount_cost.png`*
+📸 ![SS](screenshots/05_q08_discount_cost.png)
 
 > **Finding:** **Above 20%** band: **1,393 lines** (13.9% of all lines), **$362,770 sales** (15.8%), **−$135,376 profit (−37.3% margin)**. **Up to 20%** band: 8,601 lines, $1,934,431 sales, **+$421,773 profit (+21.8% margin)**. The above-20% loss equals **~47% of total company profit**.
 > **Means:** Quantifies the exact cost of over-discounting — the number that makes “cap discounts at 20%” defensible to leadership.
@@ -485,7 +485,7 @@ The queries are available in the repository:
 
 **Business Question:** Which states are contributing most to geographical profit leakage?
 
-📸 *`screenshots/05_q09_bottom_states.png`*
+📸 ![SS](screenshots/05_q09_bottom_states.png)
 
 > **Finding:** Worst states by profit: **Texas −$25,729 (Central)**, **Ohio −$16,971 (East)**, **Pennsylvania −$15,560 (East)**, **Illinois −$12,608 (Central)**. Texas + Illinois together lose **−$38,337** — almost equal to the entire Central region’s profit ($39,706). All ten bottom states run average discounts of **0.28–0.39** vs company average **0.16**.
 > **Means:** Region-level view (Q2) hides state-level pain. East’s headline margin looks healthy only because winners mask Ohio/Pennsylvania. Central’s weakness is concentrated in Texas and Illinois.
@@ -496,7 +496,7 @@ The queries are available in the repository:
 
 **Business Question:** Are products losing money because of their pricing structure, or because of excessive discounts?
 
-📸 *`screenshots/05_q10_subcat_discount_matrix.png`*
+📸 ![SS](screenshots/05_q10_subcat_discount_matrix.png)
 
 **Key Findings:**
 
