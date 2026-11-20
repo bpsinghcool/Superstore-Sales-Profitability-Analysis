@@ -1338,7 +1338,7 @@ A few points are important when interpreting this analysis.
 
 ---
 
-## 17. How to Run This Project
+## 17. 💻 How to Run This Project
 
 ### Prerequisites
 
@@ -1565,7 +1565,7 @@ The final simulation page helped me explore how historical analysis can be used 
 
 ---
 
-## 20. Final Thoughts
+## 20. 💡 Final Thoughts
 
 When I started this project, the idea was to build a sales dashboard using SQL Server and Power BI.
 
@@ -1595,11 +1595,12 @@ I am interested in opportunities involving MIS Reporting, SQL Reporting, Power B
 
 If you have any feedback or suggestions about this project, I would genuinely appreciate hearing them.
 
-**Developed by Birpal Singh**
-
-15+ years of experience in MIS & Reporting | Building further skills in SQL Server Analytics and Power BI.
-
-- [LinkedIn Profile](https://www.linkedin.com/in/BirpalSingh)
-- [GitHub Profile](https://github.com/bpsinghcool)
-
+<div align="center">
+  <i>"Open to opportunities in Remote MIS / Data Reporting / Business Operations roles. Let's connect!"</i>
+  <br><br>
+  <b>Developed by Birpal Singh</b><br>
+  <i>15+ years in MIS & Reporting — extending into SQL Server analytics and Power BI</i>
+  <br><br>
+  <a href="https://www.linkedin.com/in/BirpalSingh">🔗 LinkedIn Profile</a> |
+  <a href="https://github.com/bpsinghcool">🐙 GitHub Profile</a>
 </div>
