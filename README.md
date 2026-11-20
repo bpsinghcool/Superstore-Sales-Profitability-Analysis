@@ -649,6 +649,8 @@ The SQL view `v_superstore` acts as the central fact table.
 
 ### Star Schema Relationships
 
+![Star Schema Relationships](screenshots/09_powerbi_datamodel.png)
+
 All relationships are one-to-many with single-direction filtering.
 
 ```
@@ -1501,7 +1503,8 @@ Superstore-Sales-Profitability-Analysis/
 │   ├── 06_key_check_product_key.png
 │   ├── 06_key_check_productId_productName.png
 │   ├── 06_key_check_postal.png
-│   └── 06_key_check_location.png
+│   ├── 06_key_check_location.png
+│   ├── 09_powerbi_datamodel.png
 │   ├── 00_cover_page.png
 │   ├── 01_executive_overview.png
 │   ├── 02_profit_leakage.png
@@ -1599,4 +1602,4 @@ If you have any feedback or suggestions about this project, I would genuinely ap
 - [LinkedIn Profile](https://www.linkedin.com/in/BirpalSingh)
 - [GitHub Profile](https://github.com/bpsinghcool)
 
-\</div>
+</div>
