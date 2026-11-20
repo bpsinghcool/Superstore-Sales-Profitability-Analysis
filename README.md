@@ -1442,68 +1442,27 @@ Superstore-Sales-Profitability-Analysis/
 │   ├── superstore.csv
 │   ├── superstore_excel_testing_file.xlsx # EXCEL TESTING FILE.
 │   └── SOURCE.md                      # Kaggle link + credit
+├── design/
+│   ├── BackgrounDesign.pptx
+│   ├── Superstore_Midnight_Theme.json
+│   ├── Cover.svg
+│   ├── Customers.svg
+│   ├── Overview.svg
+│   ├── Products.svg
+│   ├── Profit.svg
+│   ├── Regions.svg
+│   ├── Simulator.svg
+│   └── images/
+│        └── filter_cancel.png
+│        └── superstore_logo.png
 ├── sql/
 │   ├── 00_data_checks_and_fixes.sql
 │   ├── 01_create_view.sql             # v_superstore (Ship_Days + Disc_Band)
 │   ├── 02_Q1_Q5.sql
 │   └── 03_Q6_Q10.sql
 ├── powerbi/
-│   └── Superstore_Dashboard.pbix
+│   └── Superstore_Sales_Intelligence_2026.pbix
 ├── screenshots/
-│   ├── 00_dataset_source.png
-│   ├── 01_import_data_error_NULL_msg.png
-│   ├── 01_import_data_Warning_msg.png
-│   ├── 02_data_checks_null_profit_row_7345.png
-│   ├── 02_data_checks_row_data_row_7345.png
-│   ├── 02_data_checks_row_7345_updated.png
-│   ├── 02_data_checks_verification_1.png
-│   ├── 02_data_checks_total_rows.png
-│   ├── 02_data_checks_total_orders.png
-│   ├── 02_data_checks_null_keys.png
-│   ├── 02_data_checks_daterange.png
-│   ├── 02_data_checks_hierarchy.png
-│   ├── 02_data_checks_total_products.png
-│   ├── 02_data_checks_bad_dates.png
-│   ├── 02_data_checks_shipping_days_check.png
-│   ├── 02_data_checks_dimension_count_check.png
-│   ├── 02_data_checks_value_ranges_check.png
-│   ├── 02_data_checks_column_count_check.png
-│   ├── 02_data_checks_duplicates_values.png
-│   ├── 02_data_checks_duplicates_impact.png
-│   ├── 02_data_checks_floating_point_check.png
-│   ├── 02_data_checks_float_to_decimal_fix.png
-│   ├── 02_data_checks_value_changed_check.png
-│   ├── 02_data_checks_distinct_discount_check.png
-│   ├── 02_data_checks_year_mismatch.png
-│   ├── 03_recon_totals.png
-│   ├── 03_recon_dates.png
-│   ├── 03_recon_dimensions.png
-│   ├── 03_recon_category.png
-│   ├── 03_recon_spotcheck.png
-│   ├── 03_excel_recon_totals.png
-│   ├── 03_excel_recon_dates.png
-│   ├── 03_excel_recon_dimensions.png
-│   ├── 03_excel_recon_category.png
-│   ├── 03_excel_recon_spotcheck.png
-│   ├── 04_view_creation.png
-│   ├── 03_recon_discount.png
-│   ├── 03_excel_recon_discount.png
-│   ├── 05_q01_category_margin.png
-│   ├── 05_q02_region_performance.png
-│   ├── 05_q03_monthly_trend.png
-│   ├── 05_q03b_peak_and_drop_months.png
-│   ├── 05_q04_discount_impact.png
-│   ├── 05_q05_loss_subcategories.png
-│   ├── 05_q06_top_products.png
-│   ├── 05_q07_yoy_trend.png
-│   ├── 05_q08_discount_cost.png
-│   ├── 05_q09_bottom_states.png
-│   ├── 05_q10_subcat_discount_matrix.png
-│   ├── 06_key_check_customer_product.png
-│   ├── 06_key_check_product_key.png
-│   ├── 06_key_check_productId_productName.png
-│   ├── 06_key_check_postal.png
-│   ├── 06_key_check_location.png
 │   ├── 09_powerbi_datamodel.png
 │   ├── 00_cover_page.png
 │   ├── 01_executive_overview.png
@@ -1511,8 +1470,9 @@ Superstore-Sales-Profitability-Analysis/
 │   ├── 03_regions_geography.png
 │   ├── 04_customer_intelligence.png
 │   ├── 05_product_profitability.png
-│   ├── 06_simulation_predictive_studio.png
+│   └── 06_simulation_predictive_studio.png
 └── README.md
+└── Project_Logs.txt
 ```
 
 ---
