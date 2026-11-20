@@ -346,6 +346,15 @@ This gave me a verified baseline before moving into business analysis.
 
 ---
 
+## ⚡ TL;DR (Executive Summary)
+
+*   **The Problem:** Deep discounting (>20%) is silently destroying **$135K (47%) of total profit**, even on our best-selling products.
+*   **The Solution:** Built a **7-Page Executive Dashboard** (SQL Server + Power BI) to identify margin leakages down to the specific State, Customer, and SKU level.
+*   **The Hero Feature:** A **What-If Simulation Engine** that proves a mere 2% discount cut + 1% price hike can instantly recover **+$47K in pure cash**, expanding enterprise margin from 12.5% to 14.2%.
+*   **Data Trust:** 100% cent-to-cent reconciled with SQL source. Zero hardcoded numbers.
+
+---
+
 ## 7. SQL Analysis — 10 Business Questions
 
 I wrote ten SQL queries to investigate different aspects of the business.
