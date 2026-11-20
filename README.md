@@ -397,212 +397,106 @@ The queries are available in the repository:
 
 **Business Question:** Which product categories are generating actual profit?
 
-**SQL Concepts:** GROUP BY, SUM, AVG, ORDER BY.
+📸 *`screenshots/05_q01_category_margin.png`*
 
-**Key Findings:**
+> **Finding:** Only 3 of 17 sub-categories have negative margin — **Tables −$17,725 (−8.56%)**, **Bookcases −$3,473 (−3.02%)**, **Supplies −$1,189 (−2.55%)**. Machines posts $189K sales but only **1.79%** margin. Largest profits: **Copiers $55,618 (37.2%)**, Phones $44,516, Accessories $41,937.
+> **Means:** Revenue rankings hide loss-makers. Any category review must start with margin, not sales.
 
-- Tables generated a loss of $17,725.
-- Bookcases generated a loss of $3,473.
-- Supplies generated a loss of $1,189.
-- Copiers generated the highest sub-category profit of approximately $55,618.
-- Machines generated approximately $189K in sales but achieved only 1.79% profit margin.
-
-**Business Takeaway:**
-
-High sales do not necessarily indicate a profitable product. Category performance should be evaluated using both revenue and margin.
-
-
+---
 
 ### Q2. Region-Wise Performance
 
 **Business Question:** Which geographical regions contribute the most profit?
 
-**SQL Concepts:** GROUP BY, aggregate functions, margin calculations.
+📸 *`screenshots/05_q02_region_performance.png`*
 
-**Key Findings:**
+> **Finding:** **West** leads on profit (**$108,418**, margin **14.94%**). **Central** is weakest on both profit (**$39,706**) and margin (**7.92%**) despite $501K sales — South sells less ($392K) but earns more profit ($46,749).
+> **Means:** High regional sales ≠ regional profit. Discount depth and mix differ by region.
 
-| Region  | Total Profit | Profit Margin |
-| ------- | ------------ | ------------- |
-| West    | $108,418     | 14.94%        |
-| East    | $91,523      | 13.48%        |
-| South   | $46,749      | 11.93%        |
-| Central | $39,706      | 7.92%         |
-
-**Business Takeaway:**
-
-Central generated approximately $501K in sales but had the weakest profitability. Revenue volume alone does not explain regional performance.
-
-
+---
 
 ### Q3. Monthly Sales Trend & Month-over-Month Growth
 
 **Business Question:** Which months generate the highest sales, and when does the business experience the biggest declines?
 
-**SQL Concepts:** CTEs, monthly aggregation, LAG(), percentage growth calculations.
+📸 *`screenshots/05_q03_monthly_trend.png`* • *`screenshots/05_q03b_peak_and_drop_months.png`*
 
-**Key Findings:**
+> **Finding:** Strongest individual months: **Nov 2017 ($118,448)**, **Dec 2016 ($96,999)**, **Sep 2017 ($87,867)**. Steepest MoM drops: **Jan 2016 (−75.3%)**, **Jan 2015 (−73.9%)**, **Feb 2014 (−68.3%)**. Across all years, calendar peaks sit in **Sep / Nov / Dec**; troughs in **Jan–Feb**.
+> **Means:** Demand is seasonal — plan stock and campaigns for Sep–Dec, expect the post-peak slide in January.
 
-- November 2017 generated approximately $118,448.
-- December 2016 generated approximately $96,999.
-- September 2017 generated approximately $87,867.
-- January 2016 recorded a 75.3% month-over-month decline.
-- January and February generally showed weaker performance.
-
-**Business Takeaway:**
-
-The business shows a seasonal pattern, with stronger sales around September, November and December. Inventory and promotional planning should account for these patterns.
-
-
+---
 
 ### Q4. Impact of Discounts on Profitability
 
 **Business Question:** How much discount can the business offer before profitability becomes a problem?
 
-**SQL Concepts:** CASE, SUM, GROUP BY, conditional aggregation.
+📸 *`screenshots/05_q04_discount_impact.png`*
 
-**Key Findings:**
+> **Finding:** Margin stays positive at 0% (**+29.5%**) and 1–20% (**+11.9%**), then turns negative at **−15.3%** (21–40%) and **−77.4%** (>40%). The >40% band alone destroys **$99,559** across 933 lines.
+> **Means:** 🚨 Clear discount threshold — beyond 20%, each sale destroys value.
 
-| Discount Band | Profit   | Profit Margin |
-| ------------- | -------- | ------------- |
-| 0%            | $320,988 | +29.5%        |
-| 1–20%         | $100,785 | +11.9%        |
-| 21–40%        | -$35,817 | -15.3%        |
-| Above 40%     | -$99,559 | -77.4%        |
-
-**Business Takeaway:**
-
-The analysis shows a clear deterioration in profitability above the 20% discount range.
-
-This became one of the central findings of the project.
-
-
+---
 
 ### Q5. Loss-Making Sub-Categories
 
 **Business Question:** Which sub-categories are responsible for the overall losses?
 
-**SQL Concepts:** GROUP BY, HAVING, aggregate calculations.
+📸 *`screenshots/05_q05_loss_subcategories.png`*
 
-**Key Findings:**
+> **Finding:** **Tables −$17,725**, **Bookcases −$3,473**, **Supplies −$1,189**. Combined loss **−$22,387**; Tables alone ≈ 79% of it.
+> **Means:** A short, named list of loss drivers — actionable by a category manager on Monday morning.
 
-| Sub-Category      | Total Loss   |
-| ----------------- | ------------ |
-| Tables            | -$17,725     |
-| Bookcases         | -$3,473      |
-| Supplies          | -$1,189      |
-| **Combined Loss** | **-$22,387** |
-
-Tables alone account for approximately 79% of these combined losses.
-
-**Business Takeaway:**
-
-These sub-categories deserve a closer look at pricing, discounts, shipping costs and product-level profitability.
-
-
+---
 
 ### Q6. Top 3 Products in Each Category
 
 **Business Question:** Are the highest-selling products also the most profitable?
 
-**SQL Concepts:** CTEs, ROW_NUMBER(), PARTITION BY.
+📸 *`screenshots/05_q06_top_products.png`*
 
-**Key Findings:**
+> **Finding:** 4 of the 9 top-sellers by revenue earn **zero or negative** profit. All three top Furniture products: **$0, −$670, −$327**. Technology’s #2 seller (Cisco TelePresence EX90) loses **−$1,811**. Top seller overall — Canon imageCLASS 2200 Copier — earns **$25,200 at 40.9%** margin.
+> **Means:** Best-sellers must be cross-checked against margin before being promoted further.
 
-- Four of the nine top-selling products by category generated zero or negative profit.
-- All three top Furniture products generated zero or negative profit.
-- Cisco TelePresence EX90 generated a loss of approximately $1,811.
-- Canon imageCLASS 2200 Copier generated approximately $25,200 profit at a 40.9% margin.
-
-**Business Takeaway:**
-
-Ranking products only by revenue can hide serious profitability issues. Top-selling products should also be evaluated by their profit contribution.
-
-
+---
 
 ### Q7. Year-over-Year Sales vs Profit Growth
 
 **Business Question:** Is sales growth translating into profit growth?
 
-**SQL Concepts:** CTEs, yearly aggregation, LAG(), percentage calculations.
+📸 *`screenshots/05_q07_yoy_trend.png`*
 
-**Key Findings:**
+> **Finding:** Sales grew from **$484K (2014)** to **$733K (2017)** — about **+51%**. Profit grew from **$50K to $93K** — about **+89%**. Margin rose 10.2% → 12.7% over the period, peaking at **13.4% in 2016** before slipping to **12.7% in 2017** (when profit growth +14% lagged sales growth +20%). 2015 is the interesting year: sales fell **−2.8%** while profit rose **+24.4%**.
+> **Means:** The business scaled profitably overall — but 2017’s margin slip flags that recent growth is less efficient. Volume growth alone is not the full success story; discount discipline still decides whether growth converts to profit.
 
-| Metric        | 2014  | 2017  |
-| ------------- | ----- | ----- |
-| Sales         | $484K | $733K |
-| Profit        | $50K  | $93K  |
-| Profit Margin | 10.2% | 12.7% |
-
-Additional observations:
-
-- Sales increased by approximately 51%.
-- Profit increased by approximately 89%.
-- Profit margin peaked at 13.4% in 2016.
-- In 2017, sales grew approximately 20%, while profit grew approximately 14%.
-
-**Business Takeaway:**
-
-Overall profitability improved over the four years, but the 2017 margin movement suggests that increased sales volume does not automatically guarantee improved efficiency.
-
-
+---
 
 ### Q8. Financial Impact of Discounts Above 20%
 
 **Business Question:** How much profit is associated with transactions receiving discounts above 20%?
 
-**SQL Concepts:** CASE, conditional aggregation, percentage calculations.
+📸 *`screenshots/05_q08_discount_cost.png`*
 
-**Key Findings:**
+> **Finding:** **Above 20%** band: **1,393 lines** (13.9% of all lines), **$362,770 sales** (15.8%), **−$135,376 profit (−37.3% margin)**. **Up to 20%** band: 8,601 lines, $1,934,431 sales, **+$421,773 profit (+21.8% margin)**. The above-20% loss equals **~47% of total company profit**.
+> **Means:** Quantifies the exact cost of over-discounting — the number that makes “cap discounts at 20%” defensible to leadership.
 
-| Metric        | Above 20% | Up to 20%  |
-| ------------- | --------- | ---------- |
-| Order Lines   | 1,393     | 8,601      |
-| Sales         | $362,770  | $1,934,431 |
-| Profit        | -$135,376 | $421,773   |
-| Profit Margin | -37.3%    | +21.8%     |
-
-The above-20% discount group represents:
-
-- 13.9% of all order lines.
-- 15.8% of total sales.
-- Approximately 47% of total company profit in loss magnitude.
-
-**Business Takeaway:**
-
-This analysis quantifies the financial impact associated with aggressive discounting and provides a strong reason to review discount approval policies.
-
-
+---
 
 ### Q9. Bottom 10 States by Profit
 
 **Business Question:** Which states are contributing most to geographical profit leakage?
 
-**SQL Concepts:** GROUP BY, ORDER BY, TOP, aggregate calculations.
+📸 *`screenshots/05_q09_bottom_states.png`*
 
-**Key Findings:**
+> **Finding:** Worst states by profit: **Texas −$25,729 (Central)**, **Ohio −$16,971 (East)**, **Pennsylvania −$15,560 (East)**, **Illinois −$12,608 (Central)**. Texas + Illinois together lose **−$38,337** — almost equal to the entire Central region’s profit ($39,706). All ten bottom states run average discounts of **0.28–0.39** vs company average **0.16**.
+> **Means:** Region-level view (Q2) hides state-level pain. East’s headline margin looks healthy only because winners mask Ohio/Pennsylvania. Central’s weakness is concentrated in Texas and Illinois.
 
-| State        | Profit   |
-| ------------ | -------- |
-| Texas        | -$25,729 |
-| Ohio         | -$16,971 |
-| Pennsylvania | -$15,560 |
-| Illinois     | -$12,608 |
-
-Texas and Illinois together account for approximately $38,337 in losses.
-
-The bottom ten states also show average discount levels of approximately 28–39%, compared with the company average of around 16%.
-
-**Business Takeaway:**
-
-Regional averages can hide state-level problems. Looking at individual states provides a more useful picture of where profitability needs attention.
-
-
+---
 
 ### Q10. Sub-Category vs Discount Band Analysis
 
 **Business Question:** Are products losing money because of their pricing structure, or because of excessive discounts?
 
-**SQL Concepts:** CASE, GROUP BY, conditional aggregation, cross-analysis.
+📸 *`screenshots/05_q10_subcat_discount_matrix.png`*
 
 **Key Findings:**
 
@@ -621,8 +515,6 @@ Not every loss-making product has the same problem.
 Some products need better pricing and cost management even at moderate discounts, while others mainly need stricter discount controls.
 
 This query helped separate these two types of profitability problems.
-
-
 
 ---
 
@@ -666,113 +558,6 @@ Dim_Customer ---- v_superstore ---- Dim_Product
 The dimensions filter the central fact table.
 
 This structure keeps the model organised and supports consistent filtering across the report.
-
-### Date Dimension
-
-I created a dedicated Date table using DAX.
-
-```
-Dim_Date =
-VAR MinDate =
-    DATE(
-        YEAR(MIN(v_superstore[Order_Date])),
-        1,
-        1
-    )
-VAR MaxDate =
-    DATE(
-        YEAR(MAX(v_superstore[Order_Date])),
-        12,
-        31
-    )
-RETURN
-ADDCOLUMNS(
-    CALENDAR(MinDate, MaxDate),
-    "Year", YEAR([Date]),
-    "Quarter", "Q" & QUARTER([Date]),
-    "Month_Num", MONTH([Date]),
-    "Month_Short", FORMAT([Date], "mmm"),
-    "Month", FORMAT([Date], "mmm yyyy"),
-    "YearMonth", YEAR([Date]) * 100 + MONTH([Date])
-)
-```
-
-The Date table was marked as a Date Table in Power BI and connected to `v_superstore[Order_Date]`.
-
-### Customer Dimension
-
-```
-Dim_Customer =
-DISTINCT(
-    SELECTCOLUMNS(
-        v_superstore,
-        "Customer_ID", v_superstore[Customer_ID],
-        "Customer_Name", v_superstore[Customer_Name],
-        "Segment", v_superstore[Segment]
-    )
-)
-```
-
-### Product Dimension
-
-```
-Dim_Product =
-DISTINCT(
-    SELECTCOLUMNS(
-        v_superstore,
-        "Product_Key",
-            v_superstore[Product_ID]
-                & "|"
-                & v_superstore[Product_Name],
-        "Product_ID", v_superstore[Product_ID],
-        "Category", v_superstore[Category],
-        "Sub_Category", v_superstore[Sub_Category],
-        "Product_Name", v_superstore[Product_Name]
-    )
-)
-```
-
-### Location Dimension
-
-```
-Dim_Location =
-DISTINCT(
-    SELECTCOLUMNS(
-        v_superstore,
-        "Location_Key",
-            v_superstore[Postal_Code]
-                & "-"
-                & v_superstore[City],
-        "Country", v_superstore[Country],
-        "Region", v_superstore[Region],
-        "State", v_superstore[State],
-        "City", v_superstore[City],
-        "Postal_Code", v_superstore[Postal_Code]
-    )
-)
-```
-
-### Fact Table Keys
-
-Two calculated columns were added to the fact table:
-
-```
-Location_Key =
-    v_superstore[Postal_Code]
-        & "-"
-        & v_superstore[City]
-```
-
-```
-Product_Key =
-    v_superstore[Product_ID]
-        & "|"
-        & v_superstore[Product_Name]
-```
-
-The composite keys were used to avoid duplicate-key issues in the dimension tables.
-
-
 
 ---
 
@@ -818,133 +603,7 @@ I created measures for the report's main KPIs, profitability calculations, custo
 
 Some of the core measures are shown below.
 
-### Core Business Measures
-
-```
-Total Sales =
-SUM(v_superstore[Sales])
-```
-
-```
-Total Profit =
-SUM(v_superstore[Profit])
-```
-
-```
-Profit Margin % =
-DIVIDE(
-    [Total Profit],
-    [Total Sales]
-)
-```
-
-```
-Total Orders =
-DISTINCTCOUNT(v_superstore[Order_ID])
-```
-
-```
-Avg Discount =
-AVERAGE(v_superstore[Discount])
-```
-
-```
-Avg Ship Days =
-AVERAGE(v_superstore[Ship_Days])
-```
-
-```
-Avg Order Value =
-DIVIDE(
-    [Total Sales],
-    [Total Orders]
-)
-```
-
-```
-Profit per Order =
-DIVIDE(
-    [Total Profit],
-    [Total Orders]
-)
-```
-
-### Business Footprint
-
-```
-Total Customers =
-DISTINCTCOUNT(v_superstore[Customer_ID])
-```
-
-```
-Order Lines =
-COUNTROWS(v_superstore)
-```
-
-```
-Products Sold =
-DISTINCTCOUNT(v_superstore[Product_ID])
-```
-
-```
-States Served =
-DISTINCTCOUNT(v_superstore[State])
-```
-
-### Discount Analysis
-
-```
-Lines Above 20% =
-CALCULATE(
-    COUNTROWS(v_superstore),
-    v_superstore[Discount] > 0.2
-)
-```
-
-```
-Profit Above 20% =
-CALCULATE(
-    [Total Profit],
-    v_superstore[Discount] > 0.2
-)
-```
-
-```
-Loss Share of Total Profit =
-DIVIDE(
-    -[Profit Above 20%],
-    [Total Profit]
-)
-```
-
-### Time Intelligence
-
-```
-Sales LY =
-CALCULATE(
-    [Total Sales],
-    SAMEPERIODLASTYEAR(Dim_Date[Date])
-)
-```
-
-```
-Profit LY =
-CALCULATE(
-    [Total Profit],
-    SAMEPERIODLASTYEAR(Dim_Date[Date])
-)
-```
-
-```
-YoY Sales Growth % =
-IF(
-    HASONEVALUE(Dim_Date[Year]),
-    DIVIDE(
-        [Total Sales] - [Sales LY],
-        [Sales LY]
-    )
-)
-```
+![Core Measures](screenshots/core_measures.png)
 
 I also created corresponding profit and order growth measures.
 
