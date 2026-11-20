@@ -1,0 +1,1788 @@
+================================================================================
+PROJECT LOG: Superstore Sales & Profitability Analysis (SQL Server + Power BI)
+================================================================================
+
+FORMAT (har entry ke liye):
+  1. Kya kiya
+  2. Kya problem aayi aur kaise fix ki
+  3. Kyun ye decision liya
+
+================================================================================
+DAY 1 — 27 Oct 2026
+================================================================================
+
+--------------------------------------------------------------------------------
+A. DATASET & TOOL DECISIONS
+--------------------------------------------------------------------------------
+
+- Decision: Dataset = Sample Superstore (Kaggle, vivek468).
+  Why: Has real Profit and Discount columns, so margin analysis
+  possible without estimation.
+
+- Decision: Use SQL Server + SSMS (not MySQL Workbench).
+  Why: Power BI connects directly; queries written in T-SQL.
+  Note: I learned SQL on MySQL; core syntax is the same, only small
+  differences (TOP vs LIMIT, DATEDIFF signature).
+
+--------------------------------------------------------------------------------
+B. SQL SERVER INSTALLATION
+--------------------------------------------------------------------------------
+
+- Issue: SSMS was installed but SQL Server engine was missing.
+  (SSMS is only the tool; the engine is a separate background service.)
+  Fix: Installed SQL Server Express (Basic install).
+  Version: Microsoft SQL Server 2025 (RTM) - 17.0.1000.7 (X64)
+
+- Connected in SSMS:
+    Server            = localhost\SQLEXPRESS
+    Authentication    = Windows Authentication
+    Trust server cert = Ticked
+
+- SELECT @@VERSION output:
+    Microsoft SQL Server 2025 (RTM) - 17.0.1000.7 (X64)
+    Oct 21 2025 12:05:57
+    Copyright (C) 2025 Microsoft Corporation
+    Express Edition (64-bit) on Windows 10 Home Single Language
+    10.0 <X64> (Build 26300: ) (Hypervisor)
+
+- Created database: SuperstoreDB (visible in Object Explorer).
+
+--------------------------------------------------------------------------------
+C. CSV IMPORT (Import Flat File wizard)
+--------------------------------------------------------------------------------
+
+- Table name: superstore
+
+- Modify Columns step:
+    * Removed spaces/hyphens from column names:
+      Order_ID, Order_Date, Ship_Date, Ship_Mode, Sub_Category,
+      Product_Name, Customer_Name, Postal_Code
+    * Types set:
+      Order_Date, Ship_Date   = date
+      Sales, Profit, Discount = float
+      Quantity                = int
+      Postal_Code             = text (keep leading zeros)
+
+--------------------------------------------------------------------------------
+ISSUE 1 — Import error on NULL
+--------------------------------------------------------------------------------
+
+- Error: "Column 'Profit' does not allow DBNull.Value"
+- Fix: Went back to Modify Columns, ticked Allow Nulls on Profit.
+- Screenshot: 01_import_data_error_NULL_msg.png
+
+--------------------------------------------------------------------------------
+ISSUE 2 — Silent data loss (Row 7345)
+--------------------------------------------------------------------------------
+
+- Import completed with warning:
+  "Up to 1 cells of data may have been dropped ... Profit"
+- Screenshot: 01_import_data_Warning_msg.png
+
+- Check: Row 7345 had blank Profit after import, but CSV had Profit = -420.
+- Screenshot: 02_data_checks_null_profit_row_7345.png
+
+- CSV raw text for Row 7345 (verified in Notepad):
+  7345,CA-2017-168389,12-11-17,12/17/2017,Standard Class,DV-13045,
+  Darrin Van Huff,Corporate,United States,Jacksonville,Florida,32216,
+  South,FUR-TA-10004289,Furniture,Tables,
+  BoxOffice By Design Rectangular and Half-Moon Meeting Room Tables,
+  721.875,6,0.45,-420
+- Screenshot: 02_data_checks_row_data_row_7345.png
+
+- Cause: Not fully confirmed. The wizard could not convert that one
+  cell and inserted NULL instead.
+
+- Fix (one-off):
+    UPDATE superstore SET Profit = -420 WHERE Row_ID = 7345;
+  Value taken from source CSV.
+
+- Verification:
+    SELECT Row_ID, Profit FROM superstore WHERE Row_ID = 7345;
+- Screenshot: 02_data_checks_row_7345_updated.png
+
+--------------------------------------------------------------------------------
+D. CONTROL TOTALS VERIFICATION (after Row 7345 fix)
+--------------------------------------------------------------------------------
+
+Query:
+    SELECT ROUND(SUM(Sales), 2)                            AS Total_Sales,
+           ROUND(SUM(Profit), 2)                           AS Total_Profit,
+           COUNT(*)                                        AS Total_Rows,
+           SUM(CASE WHEN Profit IS NULL THEN 1 ELSE 0 END) AS Null_Profit_Count,
+           COUNT(*) - COUNT(Profit)                        AS Null_Profit_Count_Alt
+    FROM superstore;
+
+Results:
+    Total_Sales           = 2,297,200.86
+    Total_Profit          = 286,397.02
+    Total_Rows            = 9,994
+    Null_Profit_Count     = 0
+    Null_Profit_Count_Alt = 0
+
+Matches reference totals for this dataset.
+Screenshot: 02_data_checks_verification_1.png
+
+--------------------------------------------------------------------------------
+LESSONS FROM IMPORT PHASE
+--------------------------------------------------------------------------------
+
+- The Import Flat File wizard can silently drop values during type
+  conversion. Always read the warning and reconcile control totals
+  (row count + SUMs) with the source after import.
+
+- Row-by-row UPDATE is fine for 1 row but not scalable. For larger
+  files: load into a staging table with all columns as text, find
+  bad values using TRY_CAST / TRY_CONVERT, build final table in one
+  INSERT ... SELECT, then match control totals with source.
+
+================================================================================
+DATA QUALITY CHECKS (15 checks completed)
+================================================================================
+
+--------------------------------------------------------------------------------
+CHECK 1 — Row count
+--------------------------------------------------------------------------------
+Query:    SELECT COUNT(*) AS Total_Rows FROM superstore;
+Result:   9,994
+Screenshot: 02_data_checks_total_rows.png
+
+--------------------------------------------------------------------------------
+CHECK 2 — Distinct Orders
+--------------------------------------------------------------------------------
+Query:    SELECT COUNT(DISTINCT Order_ID) AS Total_Orders FROM superstore;
+Result:   5,009
+Screenshot: 02_data_checks_total_orders.png
+
+--------------------------------------------------------------------------------
+CHECK 3 — Null Key Rows
+--------------------------------------------------------------------------------
+Query:
+    SELECT COUNT(*) AS Null_Key_Rows
+    FROM superstore
+    WHERE Sales IS NULL OR Profit IS NULL
+       OR Discount IS NULL OR Order_Date IS NULL;
+Result:   0
+Screenshot: 02_data_checks_null_keys.png
+
+--------------------------------------------------------------------------------
+CHECK 4 — Date Range
+--------------------------------------------------------------------------------
+Query:
+    SELECT MIN(Order_Date) AS First_Order,
+           MAX(Order_Date) AS Last_Order
+    FROM superstore;
+Result:
+    First_Order = 2014-01-03
+    Last_Order  = 2017-12-30
+Screenshot: 02_data_checks_daterange.png
+
+--------------------------------------------------------------------------------
+CHECK 5 — Hierarchy (Category / Sub-Category / Product)
+--------------------------------------------------------------------------------
+Query:
+    SELECT Category,
+           COUNT(DISTINCT Sub_Category) AS Sub_Cats,
+           COUNT(DISTINCT Product_Name) AS Products
+    FROM superstore
+    GROUP BY Category;
+Result:
+    Furniture        = 4 sub-categories
+    Office Supplies  = 9 sub-categories
+    Technology       = 4 sub-categories
+    Total            = 3 categories, 17 sub-categories
+Screenshot: 02_data_checks_hierarchy.png
+
+--------------------------------------------------------------------------------
+CHECK 6 — Distinct Products
+--------------------------------------------------------------------------------
+Query:    SELECT COUNT(DISTINCT Product_Name) AS Products FROM superstore;
+Result:   1,850 distinct product names
+Screenshot: 02_data_checks_total_products.png
+
+--------------------------------------------------------------------------------
+CHECK 7 — Specific Row Date/Ship-Days Sanity (Row 7345)
+--------------------------------------------------------------------------------
+Query:
+    SELECT Row_ID, Order_Date, Ship_Date,
+           DATEDIFF(day, Order_Date, Ship_Date) AS Ship_Days
+    FROM superstore WHERE Row_ID = 7345;
+Result:
+    Row_ID=7345  Order_Date=2017-12-11  Ship_Date=2017-12-17  Ship_Days=6
+Screenshot: 02_data_checks_bad_dates.png
+
+--------------------------------------------------------------------------------
+CHECK 8 — Shipping Days Range (expected 0-7)
+--------------------------------------------------------------------------------
+Query:
+    SELECT MIN(DATEDIFF(day, Order_Date, Ship_Date)) AS Min_Days,
+           MAX(DATEDIFF(day, Order_Date, Ship_Date)) AS Max_Days
+    FROM superstore;
+Result:
+    Min_Days = 0
+    Max_Days = 7
+Screenshot: 02_data_checks_shipping_days_check.png
+
+--------------------------------------------------------------------------------
+CHECK 9 — Dimension Counts
+--------------------------------------------------------------------------------
+Query:
+    SELECT COUNT(DISTINCT Customer_ID) AS Customers,
+           COUNT(DISTINCT Product_ID)  AS Product_IDs,
+           COUNT(DISTINCT State)       AS States,
+           COUNT(DISTINCT Region)      AS Regions,
+           COUNT(DISTINCT Segment)     AS Segments,
+           COUNT(DISTINCT Ship_Mode)   AS Ship_Modes,
+           COUNT(DISTINCT Category)    AS Categories
+    FROM superstore;
+Result:
+    Customers   = 793
+    Product_IDs = 1,862
+    States      = 49
+    Regions     = 4
+    Segments    = 3
+    Ship_Modes  = 4
+    Categories  = 3
+Screenshot: 02_data_checks_dimension_count_check.png
+
+--------------------------------------------------------------------------------
+CHECK 10 — Value Ranges
+--------------------------------------------------------------------------------
+Query:
+    SELECT MIN(Discount) AS Min_Disc, MAX(Discount) AS Max_Disc,
+           MIN(Quantity) AS Min_Qty,  MAX(Quantity) AS Max_Qty,
+           MIN(Sales)    AS Min_Sales
+    FROM superstore;
+Result:
+    Min_Disc=0, Max_Disc=0.8
+    Min_Qty=1,  Max_Qty=14
+    Min_Sales=0.44
+Screenshot: 02_data_checks_value_ranges_check.png
+
+--------------------------------------------------------------------------------
+CHECK 11 — Column Count (expected 21)
+--------------------------------------------------------------------------------
+Query:
+    SELECT COUNT(*) AS Columns_
+    FROM INFORMATION_SCHEMA.COLUMNS
+    WHERE TABLE_NAME = 'superstore';
+Result:   21
+Screenshot: 02_data_checks_column_count_check.png
+
+--------------------------------------------------------------------------------
+CHECK 12a — Duplicate Pairs (values only)
+--------------------------------------------------------------------------------
+Query:
+    SELECT s.Row_ID, s.Order_ID, s.Product_ID, s.Sales,
+           s.Quantity, s.Discount, s.Profit
+    FROM superstore s
+    JOIN (SELECT Order_ID, Product_ID FROM superstore
+          GROUP BY Order_ID, Product_ID HAVING COUNT(*) > 1) d
+      ON s.Order_ID = d.Order_ID AND s.Product_ID = d.Product_ID
+    ORDER BY s.Order_ID, s.Product_ID, s.Row_ID;
+Result:   16 rows (8 pairs)
+Screenshot: 02_data_checks_duplicates_values.png
+
+--------------------------------------------------------------------------------
+CHECK 12b — True Identical Duplicates (impact)
+--------------------------------------------------------------------------------
+Query:
+    WITH d AS (
+      SELECT *, ROW_NUMBER() OVER (
+             PARTITION BY Order_ID, Product_ID, Sales,
+                          Quantity, Discount, Profit
+             ORDER BY Row_ID) AS rn
+      FROM superstore)
+    SELECT COUNT(*) AS Extra_Identical_Copies,
+           ROUND(SUM(Sales), 2)  AS Sales_Impact,
+           ROUND(SUM(Profit), 2) AS Profit_Impact
+    FROM d WHERE rn > 1;
+Result:
+    Extra_Identical_Copies = 1
+    Sales_Impact           = $281.37  (0.012% of total)
+    Profit_Impact          = -$12.06  (-0.004% of total)
+Screenshot: 02_data_checks_duplicates_impact.png
+
+Decision:
+    8 Order_ID+Product_ID pairs appear twice. In 7, quantity/sales/profit
+    differ -> separate line items. 1 pair (Row_ID 3406 & 3407,
+    order US-2014-150119) is identical in every column except Row_ID.
+    Kept as-is from source file; documented impact. Does not change
+    any conclusion.
+
+--------------------------------------------------------------------------------
+CHECK 13 — Floating Point Check (BEFORE fix)
+--------------------------------------------------------------------------------
+Queries:
+    SELECT DISTINCT Discount FROM superstore ORDER BY Discount;
+    SELECT COUNT(*) AS Exactly_0_2 FROM superstore WHERE Discount = 0.2;
+    SELECT COLUMN_NAME, DATA_TYPE, NUMERIC_PRECISION
+    FROM INFORMATION_SCHEMA.COLUMNS
+    WHERE COLUMN_NAME IN ('Sales','Discount','Profit');
+
+Results — DISTINCT Discount values (float artifacts visible):
+    0
+    0.100000001490116
+    0.150000005960464
+    0.200000002980232
+    0.300000011920929
+    0.319999992847443
+    0.400000005960464
+    0.449999988079071
+    0.5
+    0.600000023841858
+    0.699999988079071
+    0.800000011920929
+
+Results — Exactly_0_2 = 0  (BUG: 20% rows invisible to equality check)
+
+Results — Column types:
+    Discount  float  53
+    Profit    float  53
+    Sales     float  53
+
+Screenshot: 02_data_checks_floting_point_check.png
+
+--------------------------------------------------------------------------------
+ISSUE 3 — Float Precision Broke Discount Comparisons
+--------------------------------------------------------------------------------
+
+Problem identified:
+    Stored float value:   0.200000002980232  (CSV -> wizard -> float)
+    Literal 0.2 in query: 0.200000000000000  (SQL decimal -> float)
+    Because 0.200000002980232 > 0.200000000000000:
+      - WHERE Discount = 0.2 returned 0 rows
+      - CASE bucket "WHEN Discount <= 0.2" would push 20% rows into
+        the 21-40% band and silently distort discount-band analysis
+
+Future impact (if unfixed):
+    Expected: 20% discount -> "2) 1-20%" band
+    Actual:   20% discount -> "3) 21-40%" band  (WRONG)
+
+Fix procedure:
+    USE SuperstoreDB;
+    GO
+
+    -- STEP 1: Backup
+    SELECT * INTO superstore_backup_before_discount_fix FROM superstore;
+
+    -- STEP 2: Before snapshot
+    SELECT ROUND(Discount, 2) AS Disc, COUNT(*) AS Lines
+    FROM superstore GROUP BY ROUND(Discount, 2) ORDER BY Disc;
+
+    -- STEP 3: The fix
+    ALTER TABLE superstore ALTER COLUMN Discount decimal(3,2) NOT NULL;
+
+    -- STEP 4: After check
+    SELECT Discount, COUNT(*) AS Lines
+    FROM superstore GROUP BY Discount ORDER BY Discount;
+
+    SELECT COUNT(*) AS Exactly_0_2_After_Fix
+    FROM superstore WHERE Discount = 0.2;
+
+    -- STEP 5: Control totals (must match baseline)
+    SELECT ROUND(SUM(Sales), 2)  AS Total_Sales,
+           ROUND(SUM(Profit), 2) AS Total_Profit,
+           COUNT(*)              AS Total_Rows
+    FROM superstore;
+
+Results after fix:
+    Exactly_0_2_After_Fix = 3,657
+    Total_Sales           = 2,297,200.86   (unchanged)
+    Total_Profit          = 286,397.02     (unchanged)
+    Total_Rows            = 9,994          (unchanged)
+
+Screenshot: 02_data_checks_float_to_decimal_fix.png
+
+Decision:
+    Only Discount converted to decimal(3,2). Sales and Profit kept
+    as float because they are always shown with ROUND and noise is
+    < 1 cent. Control totals match to the cent.
+
+Lesson:
+    The wizard picked float by default. NEVER use float for exact
+    comparisons — discounts, tax rates, currency thresholds.
+    Rule of thumb: float for science, decimal for money and
+    percentages. For "discount > 20%" style business rules, float
+    creates silent logic bugs.
+
+--------------------------------------------------------------------------------
+CHECK 14 — No Row Values Changed by ALTER
+--------------------------------------------------------------------------------
+Query:
+    SELECT COUNT(*) AS Changed_Rows
+    FROM superstore s
+    JOIN superstore_backup_before_discount_fix b ON s.Row_ID = b.Row_ID
+    WHERE ROUND(b.Discount, 2) <> s.Discount;
+Result:   0
+Screenshot: 02_data_checks_value_changed_check.png
+
+--------------------------------------------------------------------------------
+CHECK 15 — Distinct Discount Count After Fix
+--------------------------------------------------------------------------------
+Query:    SELECT COUNT(DISTINCT Discount) AS Distinct_Discounts FROM superstore;
+Expected: 12
+Result:   12
+Screenshot: 02_data_checks_distinct_discount_check.png
+
+================================================================================
+CONTROL TOTALS — BASELINE (must match after any change)
+================================================================================
+
+    Total Rows   = 9,994
+    Total Sales  = $2,297,200.86
+    Total Profit = $286,397.02
+
+These are the reconciliation baseline. SQL output and Power BI card
+values must both match these numbers exactly.
+
+================================================================================
+PENDING FOR TOMORROW (Day 2)
+================================================================================
+
+--------------------------------------------------------------------------------
+PENDING CHECK 16 — Order_ID year vs Order_Date year mismatch
+--------------------------------------------------------------------------------
+Query to run:
+    SELECT COUNT(*) AS Year_Mismatch
+    FROM superstore
+    WHERE TRY_CAST(SUBSTRING(Order_ID, 4, 4) AS int) <> YEAR(Order_Date);
+Expected: 0 (business rule — Order_ID encodes year like CA-2017-...)
+Screenshot to save as: 02_data_checks_year_mismatch.png
+
+--------------------------------------------------------------------------------
+PENDING CHECK 17 — Excel reconciliation
+--------------------------------------------------------------------------------
+Open source CSV in Excel, SUM Sales and Profit columns, confirm:
+    Excel Total Sales  = 2,297,200.86  (matches SQL)
+    Excel Total Profit = 286,397.02    (matches SQL — after Row 7345 fix)
+Save screenshot.
+
+--------------------------------------------------------------------------------
+PENDING — Create v_superstore view
+--------------------------------------------------------------------------------
+Script to run:
+
+    CREATE VIEW v_superstore AS
+    SELECT *,
+      DATEDIFF(day, Order_Date, Ship_Date) AS Ship_Days,
+      CASE WHEN Discount = 0    THEN '1) 0%'
+           WHEN Discount <= 0.2 THEN '2) 1-20%'
+           WHEN Discount <= 0.4 THEN '3) 21-40%'
+           ELSE '4) >40%' END AS Disc_Band
+    FROM superstore;
+
+Why: Centralises Ship_Days + Disc_Band so SQL and Power BI share one
+definition. Both will consume v_superstore (not raw table).
+
+--------------------------------------------------------------------------------
+PENDING — Run Q1 to Q10 analytical queries
+--------------------------------------------------------------------------------
+Q1  : Category / Sub-Category margin ranked ASC
+Q2  : Region-wise Sales / Profit / Orders
+Q3  : Monthly trend with LAG for MoM%
+Q4  : Discount band impact (uses v_superstore)
+Q5  : Loss-making sub-categories (HAVING SUM(Profit) < 0)
+Q6  : Top 3 products per category (ROW_NUMBER PARTITION BY)
+Q7  : YoY Sales vs Profit (tests "sales grew, profit didn't")
+Q8  : Above-20% discount cost quantification
+Q9  : Bottom 10 states by profit
+Q10 : Sub_Category x Discount band cross-matrix (uses v_superstore)
+
+For each: save screenshot (03_q1 ... 12_q10), note result in README,
+replace [XX] placeholders with real numbers.
+
+--------------------------------------------------------------------------------
+PENDING — Power BI build
+--------------------------------------------------------------------------------
+1. Connect to v_superstore
+2. Build Date table (CALENDAR), mark as Date Table
+3. Relationship: Date[Date] (1) -> v_superstore[Order_Date] (*), single
+4. Create 11 DAX measures
+5. Build 3-page dashboard (Overview / Product-Discount / Region-State)
+6. Reconcile Power BI card totals against SQL baseline
+7. Save screenshots 10-12 (dashboard pages) and 13 (reconciliation)
+
+================================================================================
+FILES & SCREENSHOTS SAVED (as of end of Day 1)
+================================================================================
+
+00_dataset_source.png
+01_import_data_error_NULL_msg.png
+01_import_data_Warning_msg.png
+02_data_checks_null_profit_row_7345.png
+02_data_checks_row_data_row_7345.png
+02_data_checks_row_7345_updated.png
+02_data_checks_verification_1.png
+02_data_checks_total_rows.png
+02_data_checks_total_orders.png
+02_data_checks_null_keys.png
+02_data_checks_daterange.png
+02_data_checks_hierarchy.png
+02_data_checks_total_products.png
+02_data_checks_bad_dates.png
+02_data_checks_shipping_days_check.png
+02_data_checks_dimension_count_check.png
+02_data_checks_value_ranges_check.png
+02_data_checks_column_count_check.png
+02_data_checks_duplicates_values.png
+02_data_checks_duplicates_impact.png
+02_data_checks_floting_point_check.png
+02_data_checks_float_to_decimal_fix.png
+02_data_checks_value_changed_check.png
+02_data_checks_distinct_discount_check.png
+
+================================================================================
+END OF DAY 1 LOG
+================================================================================
+
+
+================================================================================
+DAY 2 — 28 Oct 2026
+================================================================================
+--------------------------------------------------------------------------------
+CHECK 16 — Order_ID Year vs Order_Date Year Mismatch
+--------------------------------------------------------------------------------
+
+1. Kya kiya:
+   Order_ID me encoded year (SUBSTRING(Order_ID, 4, 4)) aur Order_Date ke YEAR()
+   ko compare karne ke liye validation query chalayi:
+
+   SELECT COUNT(*) AS Year_Mismatch
+   FROM superstore
+   WHERE TRY_CAST(SUBSTRING(Order_ID, 4, 4) AS int) <> YEAR(Order_Date);
+
+2. Kya finding aayi:
+   Year_Mismatch = 7 rows.
+   Diagnostic query se dekha ki 9,994 rows me se exactly 7 rows me mismatch hai
+   (Row_IDs: 1153, 1154, 2822, 4613, 4614, 5739, 6342).
+
+   In sabhi 7 rows me:
+   - Order_Date = 2016-12-31 (New Year's Eve)
+   - Order_ID   = 2017 series (e.g. CA-2017-160395)
+   - Ship_Date  = Jan 2017 (2 Jan - 6 Jan)
+
+   Reason: 31 Dec 2016 ki night ko system me Order_ID next fiscal year (2017)
+   ka generate hua, jabki transaction Order_Date 31 Dec 2016 hi rahi.
+
+3. Kyun ye decision liya:
+   - Data me koi fix/change nahi karenge (ye legitimate real-world edge case hai).
+   - Rule: Sabhi yearly/monthly reporting Order_Date se hogi; Order_ID se saal
+     kabhi parse nahi karenge.
+   - Screenshot saved as: 02_data_checks_year_mismatch.png
+   
+--------------------------------------------------------------------------------
+CHECK 17 — SQL vs Excel Source Reconciliation (Cent-to-Cent Validation)
+--------------------------------------------------------------------------------
+
+1. Kya kiya:
+   SQL Server ke SuperstoreDB.superstore table ka complete reconciliation
+   original Excel/CSV source file se kiya. 5 sub-checks chalaye:
+
+   17a) Master Totals: Row Count, SUM(Sales), SUM(Profit), SUM(Quantity)
+   17b) Date Range: MIN/MAX of Order_Date aur Ship_Date
+   17c) Dimension Cardinality: DISTINCT counts of Category, Sub_Category,
+        Region, Segment, Ship_Mode, State, City, Customer_ID, Product_ID
+   17d) Category-wise Breakdown: GROUP BY Category pe Sales & Profit
+   17e) Spot Check: Row_ID 1000, 2500, 5000, 7345, 9000 ki individual
+        row-level values (Order_ID, Order_Date, Product_Name, Sales, Profit)
+
+   Excel Side Validation Method:
+   - Dimension counts ke liye: =COUNTA(UNIQUE(Superstore[Column]))
+   - Spot check ke liye: XLOOKUP on Row_ID to fetch Order_ID, Order_Date,
+     Product_Name, Sales, Profit from source sheet range $A$2:$U$9995
+   - Category pivot table banayi (Rows=Category, Values=Sum Sales/Profit)
+
+2. Kya finding aayi:
+   ALL 5 SUB-CHECKS: SQL vs EXCEL = MATCHED ✅
+
+   17a) Totals:
+        Rows   = 9,994         ✅ MATCHED
+        Sales  = $2,297,200.86 ✅ MATCHED
+        Profit = $286,397.02   ✅ MATCHED
+   17b) Date Range:            ✅ MATCHED
+   17c) Dimension Counts:      ✅ MATCHED
+        (3 Categories, 17 Sub-Categories, 4 Regions, 3 Segments,
+         4 Ship Modes — all verified via COUNTA(UNIQUE(...)))
+   17d) Category-wise Sales & Profit: ✅ MATCHED
+   17e) Spot Check (5 rows incl. Row 7345 Profit=-420): ✅ MATCHED
+
+3. Kyun ye decision liya:
+   - Reconciliation 100% pass hone ke baad base table ko "LOCKED & VERIFIED"
+     declare kiya. Ab aage koi data fix nahi hoga.
+   - Yeh step MIS roles ke liye critical hai — proves that ETL pipeline
+     (CSV → SQL Server) ne zero data loss aur zero transformation error
+     introduce kiya.
+   - Saare earlier fixes (Row 7345 NULL Profit, Discount float→decimal)
+     ka impact bhi is reconciliation se validate ho gaya.
+   - Screenshots saved as:
+     SQL Side:  03_recon_totals.png, 03_recon_dates.png,
+                03_recon_dimensions.png, 03_recon_category.png,
+                03_recon_spotcheck.png
+     Excel Side: 03_excel_recon_totals.png, 03_excel_recon_dates.png,
+                 03_excel_recon_dimensions.png, 03_excel_recon_category.png,
+                 03_excel_recon_spotcheck.png
+				 
+				 
+--------------------------------------------------------------------------------
+STEP 18 — Reusable View Creation (v_superstore) + Disc_Band Validation
+--------------------------------------------------------------------------------
+
+1. Kya kiya:
+   Analysis-ready view create kiya jisme base table ke saare columns (*)
+   ke saath 2 derived columns add kiye:
+   - Ship_Days: DATEDIFF(day, Order_Date, Ship_Date)
+   - Disc_Band: CASE-based discount bucketing
+     '1) 0%' | '2) 1-20%' | '3) 21-40%' | '4) >40%'
+
+   Note: View intentionally minimal rakha — sirf wahi derived columns
+   jo downstream queries (Q4, Q10) actually consume karte hain.
+   Baaki calculations (YoY, MoM, Margin%) query-level pe inline hain
+   taaki view lean aur maintainable rahe.
+
+   CREATE OR ALTER VIEW v_superstore AS
+   SELECT *,
+     DATEDIFF(day, Order_Date, Ship_Date) AS Ship_Days,
+     CASE WHEN Discount = 0        THEN '1) 0%'
+          WHEN Discount <= 0.2     THEN '2) 1-20%'
+          WHEN Discount <= 0.4     THEN '3) 21-40%'
+          ELSE '4) >40%' END AS Disc_Band
+   FROM superstore;
+
+   Uske baad view-level Disc_Band distribution ko Excel pivot se
+   cross-verify kiya (Check 17f):
+
+   SELECT Disc_Band, COUNT(*) AS Lines,
+          ROUND(SUM(Sales),0) AS Sales, ROUND(SUM(Profit),0) AS Profit,
+          ROUND(SUM(Profit)*100.0/SUM(Sales),1) AS Margin_Pct
+   FROM v_superstore GROUP BY Disc_Band ORDER BY Disc_Band;
+
+2. Kya finding aayi:
+   View baseline:
+   - View_Rows   = 9,994           ✅ (base table se match)
+   - View_Sales  = $2,297,200.86   ✅ (Check 17 se match)
+   - View_Profit = $286,397.02     ✅ (Check 17 se match)
+
+   Disc_Band distribution (v_superstore vs Excel pivot) — MATCHED ✅
+
+   | Disc_Band | Lines | Sales      | Profit    | Margin_Pct |
+   |-----------|-------|------------|-----------|------------|
+   | 1) 0%     | 4,798 | 1,087,908  |  320,988  |  +29.5%    |
+   | 2) 1-20%  | 3,803 |   846,522  |  100,785  |  +11.9%    |
+   | 3) 21-40% |   460 |   234,138  |  -35,817  |  -15.3%    |
+   | 4) >40%   |   933 |   128,632  |  -99,559  |  -77.4%    |
+   | TOTAL    | 9,994 | 2,297,200  |  286,397  |            |
+
+   Key signal (preview of Q4):
+   - Margin positive at 0% and 1-20% bands
+   - Margin turns NEGATIVE from 21-40% band onward
+   - >40% band alone: 933 lines, -$99,559 profit, -77.4% margin
+   - Band line counts add to 9,994; consistent with post-fix
+     distinct discount counts (e.g. 1-20% band includes the 3,657
+     rows at exactly 0.20)
+
+3. Kyun ye decision liya:
+   - Q4 (Discount Impact) aur Q10 (Sub-Category × Discount Matrix)
+     dono v_superstore.Disc_Band use karte hain — isliye view banate
+     hi band logic ko Excel se lock kar diya.
+   - Consistent bucket labels ('1) 0%', '2) 1-20%' etc.) ensure karte
+     hain ki SQL results aur Power BI visuals me same sorting aaye.
+   - CREATE OR ALTER use kiya taaki future me bhi view update kar sakein
+     bina DROP/CREATE ke.
+   - Screenshots saved as:
+     04_view_creation.png
+     03_recon_discount.png       (SQL Disc_Band)
+     03_excel_recon_discount.png (Excel Disc_Band pivot)
+
+================================================================================
+END OF DAY 2 LOG
+================================================================================
+
+================================================================================
+DAY 3 - 29 Oct 2026
+================================================================================
+Rules used in every analysis query:
+- Time analysis uses Order_Date, never the year inside Order_ID.
+- Base table: superstore. The view v_superstore is used only where Disc_Band
+  is needed (Q4, Q10).
+- Baseline totals: 9,994 rows | Sales 2,297,200.86 | Profit 286,397.02
+- Numbers marked (derived) were calculated from the outputs in this log, not
+  taken from a separate query.
+
+--------------------------------------------------------------------------------
+STEP 19 - ANALYSIS BATCH 1: Q1 to Q5          (script: sql/02_Q1_Q5.sql)
+--------------------------------------------------------------------------------
+
+Q1 - Category and sub-category profitability (worst margin first)
+Screenshot: 05_q01_category_margin.png
+Sanity: 17 rows. Sales add up to 2,297,201. Profit adds up to 286,399 (baseline
+286,397.02); the 2-dollar gap comes from rounding each row to whole dollars.
+Output (Category | Sub_Category | Sales | Profit | Margin_Pct):
+  Furniture        | Tables      | 206966 | -17725 | -8.56
+  Furniture        | Bookcases   | 114880 |  -3473 | -3.02
+  Office Supplies  | Supplies    |  46674 |  -1189 | -2.55
+  Technology       | Machines    | 189239 |   3385 |  1.79
+  Furniture        | Chairs      | 328449 |  26590 |  8.10
+  Office Supplies  | Storage     | 223844 |  21279 |  9.51
+  Technology       | Phones      | 330007 |  44516 | 13.49
+  Furniture        | Furnishings |  91705 |  13059 | 14.24
+  Office Supplies  | Binders     | 203413 |  30222 | 14.86
+  Office Supplies  | Appliances  | 107532 |  18138 | 16.87
+  Office Supplies  | Art         |  27119 |   6528 | 24.07
+  Technology       | Accessories | 167380 |  41937 | 25.05
+  Office Supplies  | Fasteners   |   3024 |    950 | 31.40
+  Technology       | Copiers     | 149528 |  55618 | 37.20
+  Office Supplies  | Envelopes   |  16476 |   6964 | 42.27
+  Office Supplies  | Paper       |  78479 |  34054 | 43.39
+  Office Supplies  | Labels      |  12486 |   5546 | 44.42
+Finding: only 3 of 17 sub-categories have a negative margin: Tables -$17,725
+(-8.56%), Bookcases -$3,473 (-3.02%), Supplies -$1,189 (-2.55%). Machines has
+$189K of sales but only a 1.79% margin ($3,385). The largest profits come from
+Copiers $55,618 (37.2%), Phones $44,516 and Accessories $41,937.
+Means: revenue ranking hides the loss-makers; a category review has to start
+from margin. (Category-level totals: use the Check 17d output.)
+
+Q2 - Region-wise sales, profit, orders and margin
+Screenshot: 05_q02_region_performance.png
+Sanity: 4 rows. Sales add up to 2,297,201; profit to 286,396 (rounding); Orders
+add up to 5,009 (1,611 + 1,401 + 822 + 1,175), the total from Check 2.
+Output (Region | Sales | Profit | Orders | Margin_Pct):
+  West    | 725458 | 108418 | 1611 | 14.94
+  East    | 678781 |  91523 | 1401 | 13.48
+  South   | 391722 |  46749 |  822 | 11.93
+  Central | 501240 |  39706 | 1175 |  7.92
+Finding: West has the highest profit ($108,418, margin 14.94%). Central has the
+lowest profit ($39,706) and margin (7.92%) although it ranks third in sales
+($501,240): South sells less ($391,722) but earns more profit ($46,749).
+Means: high regional sales do not guarantee regional profit.
+
+Q3 - Monthly sales trend with month-over-month growth (LAG)
+Screenshot: 05_q03_monthly_trend.png (shows the first 15 of the 48 months)
+Sanity: 48 rows expected (Jan 2014 to Dec 2017); MoM_Pct is NULL for the first
+month. First 15 months (Mth | Sales | MoM_Pct):
+  2014-01 | 14237 | NULL    2014-02 |  4520 |  -68.3   2014-03 | 55691 | 1132.1
+  2014-04 | 28295 | -49.2   2014-05 | 23648 |  -16.4   2014-06 | 34595 |   46.3
+  2014-07 | 33946 |  -1.9   2014-08 | 27909 |  -17.8   2014-09 | 81777 |  193.0
+  2014-10 | 31453 | -61.5   2014-11 | 78629 |  150.0   2014-12 | 69546 |  -11.6
+  2015-01 | 18174 | -73.9   2015-02 | 11951 |  -34.2   2015-03 | 38726 |  224.0
+
+Q3b - helper: 3 best months by sales and 3 steepest MoM drops
+Screenshot: 05_q03b_peak_and_drop_months.png
+Output (Mth | Sales | MoM_Pct | Sales_Rank | Drop_Rank):
+  2014-02-01 |   4520 | -68.3 | 48 | 3
+  2015-01-01 |  18174 | -73.9 | 45 | 2
+  2016-01-01 |  18542 | -75.3 | 44 | 1
+  2016-12-01 |  96999 |  22.1 |  2 | 30
+  2017-09-01 |  87867 |  39.2 |  3 | 34
+  2017-11-01 | 118448 |  52.3 |  1 | 38
+Finding: the three best months are Nov 2017 ($118,448), Dec 2016 ($96,999) and
+Sep 2017 ($87,867). The steepest drops are Jan 2016 (-75.3%), Jan 2015 (-73.9%)
+and Feb 2014 (-68.3%); these are also three of the weakest months overall.
+Means: the strongest months fall between September and December and the
+steepest falls come right after the year-end peak. Not yet proven for every
+year: see PENDING P2 before writing "every year".
+
+Q4 - Margin and profit across discount bands (v_superstore)
+Screenshot: 05_q04_discount_impact.png
+Output (Disc_Band | Lines | Sales | Profit | Margin_Pct):
+  1) 0%     | 4798 | 1087908 |  320988 |  29.5
+  2) 1-20%  | 3803 |  846522 |  100785 |  11.9
+  3) 21-40% |  460 |  234138 |  -35817 | -15.3
+  4) >40%   |  933 |  128632 |  -99559 | -77.4
+Sanity: lines add up to 9,994; same as the check in the view script (17f).
+Finding: margin falls from +29.5% (no discount) to +11.9% (1-20%), then turns
+negative: -15.3% (21-40%) and -77.4% (above 40%).
+
+Q5 - Loss-making sub-categories (biggest loss first)
+Screenshot: 05_q05_loss_subcategories.png
+Output (Sub_Category | Sales | Profit | Margin_Pct):
+  Tables    | 206966 | -17725 | -8.56
+  Bookcases | 114880 |  -3473 | -3.02
+  Supplies  |  46674 |  -1189 | -2.55
+Sanity: each row is negative in Q1 as well.
+Finding: the three together lose $22,387 (derived); Tables alone is about 79%
+of that (derived: 17,725 / 22,387).
+
+--------------------------------------------------------------------------------
+STEP 20 - ANALYSIS BATCH 2: Q6 to Q10         (script: sql/03_Q6_Q10.sql)
+--------------------------------------------------------------------------------
+
+Q6 - Top 3 products per category by sales (ROW_NUMBER), with profit
+Screenshot: 05_q06_top_products.png
+Sanity: 9 rows, 3 per category.
+Output (Category | Product | Sales | Profit | Margin_Pct | rank):
+  Furniture       | HON 5400 Series Task Chairs for Big and Tall     | 21871 |     0 |    0 | 1
+  Furniture       | Riverside Palais Royal Lawyers Bookcase, ...     | 15611 |  -670 | -4.3 | 2
+  Furniture       | Bretford Rectangular Conference Table Tops       | 12995 |  -327 | -2.5 | 3
+  Office Supplies| Fellowes PB500 Electric Punch Plastic Comb ...   | 27453 |  7753 | 28.2 | 1
+  Office Supplies| GBC DocuBind TL300 Electric Binding System       | 19823 |  2234 | 11.3 | 2
+  Office Supplies| GBC Ibimaster 500 Manual ProClick Binding System | 19025 |   761 |  4.0 | 3
+  Technology      | Canon imageCLASS 2200 Advanced Copier            | 61600 | 25200 | 40.9 | 1
+  Technology      | Cisco TelePresence System EX90 Videoconf. Unit   | 22638 | -1811 | -8.0 | 2
+  Technology      | Hewlett Packard LaserJet 3310 Copier             | 18840 |  6984 | 37.1 | 3
+Finding: 4 of the 9 top sellers earn zero or negative profit. All three top
+Furniture products earn $0, -$670 and -$327; in Technology the number 2 seller
+(Cisco TelePresence EX90) loses $1,811. The top seller overall, the Canon
+imageCLASS 2200 copier, earns $25,200 (40.9%).
+Means: best-sellers must be checked against margin before they are promoted.
+
+Q7 - Year-over-year sales, profit and margin
+Screenshot: 05_q07_yoy_trend.png
+Sanity: 4 rows. Sales add up to 2,297,201 and profit to 286,397 (baseline).
+Output (Yr | Sales | Profit | Margin_Pct | Sales_Growth_Pct | Profit_Growth_Pct):
+  2014 | 484247 | 49544 | 10.2 | NULL  | NULL
+  2015 | 470533 | 61619 | 13.1 |  -2.8 | 24.4
+  2016 | 609206 | 81795 | 13.4 |  29.5 | 32.7
+  2017 | 733215 | 93439 | 12.7 |  20.4 | 14.2
+Finding: sales grew 51% from 2014 to 2017 (derived) and profit grew 89%
+(derived); margin rose from 10.2% to 12.7%. In 2015 sales fell 2.8% while
+profit rose 24.4%. In 2017 profit grew more slowly (14.2%) than sales (20.4%),
+and margin slipped from 13.4% to 12.7%.
+CORRECTION: the prepared README claim "sales grew, profit did not follow" is
+NOT supported. Profit grew every year. Page 1 title and Key Findings must be
+rewritten from this output.
+
+Q8 - The cost of discounts above 20%
+Screenshot: 05_q08_discount_cost.png
+Output (Grp | Lines | Sales | Profit | Margin_Pct):
+  Above 20% | 1393 |  362770 | -135376 | -37.3
+  Up to 20% | 8601 | 1934431 |  421773 |  21.8
+Sanity: matches Q4 (bands 3 + 4 and bands 1 + 2); lines add up to 9,994 and
+profit to 286,397.
+Finding: lines with a discount above 20% are 13.9% of all lines and 15.8% of
+sales (derived) but lose $135,376, which equals 47% of the reported total
+profit (derived: 135,376 / 286,397). Lines up to 20% earn $421,773 at a 21.8%
+margin.
+
+Q9 - Ten least profitable states
+Screenshot: 05_q09_bottom_states.png
+Output (State | Region | Sales | Profit | Margin_Pct | Avg_Discount):
+  Texas          | Central | 170188 | -25729 | -15.1 | 0.37
+  Ohio           | East    |  78258 | -16971 | -21.7 | 0.32
+  Pennsylvania   | East    | 116512 | -15560 | -13.4 | 0.33
+  Illinois       | Central |  80166 | -12608 | -15.7 | 0.39
+  North Carolina | South   |  55603 |  -7491 | -13.5 | 0.28
+  Colorado       | West    |  32108 |  -6528 | -20.3 | 0.32
+  Tennessee      | South   |  30662 |  -5342 | -17.4 | 0.29
+  Arizona        | West    |  35282 |  -3428 |  -9.7 | 0.30
+  Florida        | South   |  89474 |  -3399 |  -3.8 | 0.30
+  Oregon         | West    |  17431 |  -1190 |  -6.8 | 0.29
+Finding: Texas (-$25,729) and Ohio (-$16,971) lose the most. Ohio and
+Pennsylvania are in the East region, not Central. Texas and Illinois are the
+Central states: together they lose $38,337 (derived), almost as much as the
+whole Central region earns ($39,706, Q2). Average discount in all ten states
+is between 0.28 and 0.39.
+CORRECTION: the prepared README text "within Central, states like Texas, Ohio,
+Pennsylvania" is wrong. Use the Region column.
+Note: Avg_Discount shows that heavy discounting goes together with the losses;
+it does not prove the cause. Compare with the all-data average (PENDING P1).
+
+Q10 - Profit by sub-category and discount band (pivot)
+Screenshot: 05_q10_subcat_discount_matrix.png
+Sanity: 17 rows. Band columns add up to about 320,986 / 100,784 / -35,818 /
+-99,559, which matches Q4 (320,988 / 100,785 / -35,817 / -99,559) within
+rounding. Total_Profit matches Q1. NULL means no sales in that band.
+Output (Sub_Category | 0% | 1-20% | 21-40% | >40% | Total):
+  Tables      | 13276 |   -304 | -19590 | -11108 | -17725
+  Bookcases   |  6076 |   1549 |  -2947 |  -8151 |  -3473
+  Supplies    |  1718 |  -2907 |   NULL |   NULL |  -1189
+  Fasteners   |   652 |    297 |   NULL |   NULL |    950
+  Machines    | 27138 |   5802 |  -2341 | -27215 |   3385
+  Labels      |  4422 |   1124 |   NULL |   NULL |   5546
+  Art         |  5381 |   1147 |   NULL |   NULL |   6528
+  Envelopes   |  4977 |   1987 |   NULL |   NULL |   6964
+  Furnishings | 16848 |   2156 |   NULL |  -5945 |  13059
+  Appliances  | 23184 |   3584 |   NULL |  -8630 |  18138
+  Storage     | 25528 |  -4249 |   NULL |   NULL |  21279
+  Chairs      | 21933 |  11394 |  -6737 |   NULL |  26590
+  Binders     | 39314 |  29418 |   NULL | -38510 |  30222
+  Paper       | 25329 |   8724 |   NULL |   NULL |  34054
+  Accessories | 35289 |   6647 |   NULL |   NULL |  41937
+  Phones      | 34365 |  16536 |  -6386 |   NULL |  44516
+  Copiers     | 35556 |  17879 |   2183 |   NULL |  55618
+Finding:
+- At 0% discount all 17 sub-categories are profitable (smallest: Fasteners $652).
+- Above 20% discount, 11 of the 12 sub-category/band combinations that exist
+  lose money (derived count); the only exception is Copiers in the 21-40% band
+  (+$2,183).
+- Biggest loss cells: Binders above 40% (-$38,510), Machines above 40%
+  (-$27,215), Tables 21-40% (-$19,590) and Tables above 40% (-$11,108).
+- Tables earn $13,276 at 0% discount, but lose money in every discounted band.
+  So the Tables loss is a discount problem, not a structural one.
+- Binders, Machines, Bookcases, Furnishings and Appliances are profitable up
+  to 20% and lose only above it.
+- Not every loss starts above 20%: Tables (-$304), Supplies (-$2,907) and
+  Storage (-$4,249) already lose money in the 1-20% band.
+- Copiers is profitable in every band it appears in.
+Means: the 20% cap is a good starting rule, but Tables, Supplies and Storage
+need a lower cap or a price review.
+
+--------------------------------------------------------------------------------
+HYPOTHESES FROM THE README DRAFT VS ACTUAL RESULTS
+--------------------------------------------------------------------------------
+  Draft said                                          Result
+  Discounts above 20% push margin negative            CONFIRMED (Q4, Q8, Q10)
+  Tables, Bookcases, Supplies lose money              CONFIRMED (Q1, Q5)
+  West most profitable, Central least                 CONFIRMED (Q2)
+  Sales grew every year, profit did not               REJECTED (Q7): profit
+                                                      grew every year
+  Tables lose money in every discount band            REJECTED (Q10): +$13,276
+                                                      at 0% discount
+  Phones stay profitable in every band                REJECTED (Q10): -$6,386
+                                                      in the 21-40% band
+  Binders lose only above 20%                         CONFIRMED (Q10)
+  Texas, Ohio, Pennsylvania are Central states        REJECTED (Q9): Ohio and
+                                                      Pennsylvania are East
+All README text must be rewritten from the outputs above.
+
+
+--------------------------------------------------------------------------------
+PENDING RESOLVED (P1, P2, P3)
+--------------------------------------------------------------------------------
+
+P1 - All-data average discount (compare with Q9 bottom states)
+Query:  SELECT ROUND(AVG(Discount), 2) AS Avg_Discount_All FROM superstore;
+Result: 0.16
+Finding: Overall average discount = 16%. All ten least-profitable states in Q9
+         sit between 0.28 and 0.39 — roughly 1.8x to 2.4x the company average.
+         Heavy discounting and state-level losses travel together (association,
+         not proven causation).
+Screenshot: (optional) 05_p1_avg_discount.png
+
+P2 - Calendar-month seasonality (all years combined)
+Query:  SELECT MONTH(Order_Date) AS Mon, ROUND(SUM(Sales), 0) AS Sales
+        FROM superstore GROUP BY MONTH(Order_Date) ORDER BY Mon;
+Result (Mon | Sales):
+  1  94,925    2  59,751    3 205,005    4 137,762
+  5 155,029    6 152,719    7 147,238    8 159,044
+  9 307,650   10 200,323   11 352,461   12 325,294
+Finding: Strongest calendar months = Nov ($352K), Dec ($325K), Sep ($308K).
+         Weakest = Feb ($60K), then Jan ($95K). Combined with Q3b (steepest
+         MoM drops = Jan 2016 -75.3%, Jan 2015 -73.9%, Feb 2014 -68.3%), the
+         pattern is: peak in Sep-Dec, trough in Jan-Feb right after the
+         year-end peak. Safe to describe as a clear seasonal shape; do NOT
+         claim "every single year identical" without year-by-year split.
+Screenshot: (optional) 05_p2_seasonality_by_month.png
+
+P3 - Q3 row count
+Confirmed in Messages tab: 48 rows (Jan 2014 → Dec 2017). ✅
+
+P4 - README update (Q1-Q10 findings, Key Findings, Recommendations,
+     insight titles, screenshot names, hypothesis corrections) → NEXT STEP
+P5 - Power BI build + SQL↔BI reconciliation → after README
+
+
+================================================================================
+PENDING FOR TOMORROW (Day 4) - POWER BI BUILD PHASE
+================================================================================
+
+--------------------------------------------------------------------------------
+PENDING P1 - UI/UX Background Design (PowerPoint)
+--------------------------------------------------------------------------------
+- PPT me Flipkart-style dashboard layout design karna hai.
+- Shapes: Dark Blue header, left sidebar, 5 KPI boxes (top), 3 chart boxes (middle), 3 detail boxes (bottom).
+- Background colour: Light grey (#F4F6F9) so white boxes stand out.
+- Save as: dashboard_bg.png.
+
+--------------------------------------------------------------------------------
+PENDING P2 - Power BI Data Import & Modeling
+--------------------------------------------------------------------------------
+- SQL Server (localhost\SQLEXPRESS) se 'v_superstore' view Import mode me lana hai.
+- Modeling tab me 4 New Tables (DAX se) banani hain:
+  1. Dim_Date (Mark as Date Table)
+  2. Dim_Customer
+  3. Dim_Product
+  4. Dim_Location
+- v_superstore (Fact table) me 'Location_Key' custom column add karna hai.
+- Model View me Star Schema relationships (1-to-Many) build karni hain.
+- Screenshot save karna hai: 09_powerbi_datamodel.png
+
+--------------------------------------------------------------------------------
+PENDING P3 - DAX Measures & Reconciliation Check
+--------------------------------------------------------------------------------
+- 'Enter Data' se '_Measures' naam ki khali table banani hai.
+- 11 core DAX measures create karne hain (Total Sales, Profit, Margin, etc.).
+- Blank page par 2 Card visuals lagakar Reconciliation verify karni hai:
+  Expected Total Sales: $2,297,200.86
+  Expected Total Profit: $286,397.02
+  (Must match SQL baseline exactly before proceeding to charts).
+
+--------------------------------------------------------------------------------
+PENDING P4 - Dashboard Visuals Mapping
+--------------------------------------------------------------------------------
+- PBI Canvas Background me 'dashboard_bg.png' set karni hai (Transparency 0%, Fit).
+- Saare charts (Line, Donut, Map, Matrix, Cards) draw karne hain.
+- Golden Rule for visuals: Format > General > Effects > Background: OFF (100% transparent).
+- Slicers Dimension tables se lene hain.
+- Save screenshots of completed dashboard pages.
+================================================================================
+END OF DAY 3 LOG
+================================================================================
+
+================================================================================
+DAY 4 (30 Oct 2026) — POWER BI BUILD PHASE
+================================================================================
+
+PART A: DIMENSION KEY CHECKS (SQL, read-only)
+----------------------------------------------
+Kya kiya: Power BI star schema ke liye dimension table keys verify kiye.
+  Har dimension ka "one" side unique hona chahiye — yeh check usi ke liye hai.
+  SQL file mein PART 4 add kiya (00_data_checks_and_fixes.sql).
+
+CHECK 19 — Dim_Customer key (Customer_ID):
+  793 rows / 793 keys → UNIQUE ✅
+  Screenshot: 06_key_check_customer_product.png
+
+CHECK 20 — Dim_Product key (Product_ID alone):
+  1,894 rows / 1,862 keys → NOT UNIQUE ❌
+  32 Product_IDs carry two different Product_Names (1,894 − 1,862 = 32).
+  Screenshot: 06_key_check_product_key.png
+
+CHECK 20b — Dim_Product composite key (Product_ID | Product_Name):
+  1,894 rows / 1,894 keys → UNIQUE ✅
+  Screenshot: 06_key_check_productId_productName.png
+
+CHECK 20c — Which Product_IDs have multiple names:
+  32 Product_IDs returned with COUNT(DISTINCT Product_Name) > 1.
+  Root cause: likely product name changes over 4 years for same SKU.
+
+CHECK 21 — Postal Code cardinality:
+  631 distinct Postal_Codes in the dataset.
+  Screenshot: 06_key_check_postal.png
+
+CHECK 22 — Dim_Location composite key (Postal_Code - City):
+  632 rows / 632 keys → UNIQUE ✅
+  631 postal codes but 632 combinations → exactly one postal code is
+  shared by two different cities.
+  Screenshot: 06_key_check_location.png
+
+Decisions:
+  D1. Dim_Product will use composite key: Product_Key = Product_ID | Product_Name
+  D2. Dim_Location will use composite key: Location_Key = Postal_Code - City
+  D3. Both composite keys must be added as calculated columns in the
+      v_superstore fact table before building relationships in Power BI.
+  D4. Dim_Customer can use Customer_ID directly (already unique).
+
+Lesson: NEVER assume a business ID is unique. Always run
+  COUNT(*) vs COUNT(DISTINCT key) before creating a 1-to-Many relationship.
+  A duplicate key on the "one" side causes ambiguous filter propagation
+  and silently wrong DAX totals.
+
+Status: ✅ PART A COMPLETE — ready for PPT background + Power BI import.
+
+
+================================================================================
+DAY 5 (5 Nov 2026) — POWER BI BUILD + NEW UI DIRECTION
+================================================================================
+
+DESIGN PIVOT
+------------
+Kya kiya: Microsoft Powerpoint me "Superstore Sales Intelligence" background design banaya.
+  Reason: dark navy + cyan glassmorphism zyada premium aur modern lagta hai
+  portfolio ke liye; SVG export se pixel-perfect backgrounds mile.
+
+Backgrounds created (SVG → high-res PNG/SVG):
+  1. Cover page          — hero + pipeline (Kaggle→Import→Reconcile→Star Schema→Dashboard)
+  2. Page 1 Overview     — KPI strip + flow + charts + table
+  3. Page 2 Products     — product/discount deep-dive layout
+  4. Page 3 Regions      — geo/state layout
+  5. Page 4 Customers    — customer/segment layout
+
+All backgrounds: dark navy base, cyan (#00D4FF-range) accents, rounded
+glass cards, left icon rail (Home / Cart / Globe / People), top filter
+chips (Date Range, Region, Category, Segment, Ship Mode).
+
+POWER BI MODEL STATUS
+---------------------
+- Connected: localhost\SQLEXPRESS → SuperstoreDB → v_superstore (Import)
+- Baseline reconciliation on Overview page: 100% MATCH
+    Total Sales      = $2,297,200.86  ✅
+    Total Profit     = $286,397.02    ✅
+    Profit Margin %  = 12.47%         ✅
+    Avg Discount     = 15.62%         ✅
+    Customers        = 793            ✅
+    Orders           = 5,009          ✅
+    Order Lines      = 9,994          ✅
+    Products         = 1,862          ✅
+    States           = 49             ✅
+- Table visual bottom total confirms Sales + Profit to the cent.
+- Top product row shows Canon imageCLASS 2200 Advanced Copier
+  ($61,599.82 sales / $25,199.93 profit) — matches SQL Q6.
+- Loss product TEC-MA-10002412 visible with ($1,811.08) — correct.
+
+PAGE STRUCTURE (locked)
+-----------------------
+Cover     → Title, pipeline story, 3 value props (Reconciled / Discount insight / State-level)
+Overview  → 6 KPI chips + entity flow (Customers→Orders→Lines→Products→States)
+            + Sales/Profit monthly trend + Category donut + Region bars + Top products table
+Products  → (layout ready, visuals pending)
+Regions   → (layout ready, visuals pending)
+Customers → (layout ready, visuals pending)
+
+FILTERS (top chip bar, all pages)
+---------------------------------
+Date Range | Region | Category | Segment | Ship Mode
+
+LEFT RAIL NAV
+-------------
+Home (Overview) | Cart (Products) | Globe (Regions) | People (Customers)
+
+DECISIONS
+---------
+D1. Dark theme final — light Flipkart theme archived as design exploration.
+D2. SVG masters kept for any future resolution change.
+D3. Cover page included so PBIX opens on a story, not a raw canvas.
+D4. Numbers stay measure-driven; no hardcoded values in backgrounds.
+D5. Continue Rule #1: every new card/visual must reconcile before polish.
+
+PENDING
+-------
+P1. Products page visuals (Sub-Cat profit bar, Disc_Band matrix, >20% callout)
+P2. Regions page visuals (Shape Map USA, Bottom 10 states, Region×Category)
+P3. Customers page visuals (Top customers, Segment donut, Cohort/frequency if time)
+P4. Sync slicers across 4 pages + page navigator on left rail
+P5. Tooltip measures + final QA screenshots
+P6. README + GitHub portfolio update with new dark-theme shots
+
+SCREENSHOTS SAVED
+-----------------
+13_bg_cover.png
+14_bg_overview.png
+15_bg_products.png
+16_bg_regions.png
+17_bg_customers.png
+
+Status: Background pack COMPLETE. Overview page LIVE with reconciled numbers.
+        Products / Regions / Customers visuals = IN PROGRESS.
+
+================================================================================
+DAY 6 (6 Nov 2026) — PAGE 1 OVERVIEW COMPLETE + SMART KPI + TOOLTIPS
+================================================================================
+
+GOAL
+----
+Page 1 (Executive Overview) ko portfolio-grade lock karna:
+  • Combined KPI chips (value + dynamic growth subtitle)
+  • First-year vs Last-year + YoY smart logic
+  • Fully dynamic Insight Banner
+  • Custom report-page tooltips on all 6 KPI cards
+  • Cent-to-cent reconciliation across All / 2014 / 2015 / 2016 / 2017
+
+================================================================================
+WHAT WE BUILT TODAY
+================================================================================
+
+1. TOP 5 PRODUCTS TABLE (Visual-level Top N)
+--------------------------------------------
+- Table: Product_ID | Total Sales | Total Profit
+- Filter pane → Product_ID → Top N = 5 by [Total Sales]
+- Sort Descending on Total Sales
+- Totals = Top 5 sum only ($153,385.74 Sales / $33,375.39 Profit)
+- Conditional red on negative profit
+- Verified top row: TEC-CO-10004722 ($61,599.82 / $25,199.93)
+
+2. KPI STRIP REDESIGN (6 Combined Cards)
+----------------------------------------
+OLD: Separate “Sales Growth / Profit Growth / Orders Growth” cards → NA confusion
+NEW: Big number + small dynamic subtitle on same card
+
+  Card 1  Total Sales       $2.30M   ▲ 51.4% 2014→2017
+  Card 2  Total Profit      $286.40K ▲ 88.6% 2014→2017
+  Card 3  Total Orders      5.01K    ▲ 74.1% 2014→2017
+  Card 4  Profit Margin %   12.47%   ▲ 2.5%  2014→2017
+  Card 5  Avg Order Value   $458.61  ▼ 13.0% 2014→2017
+  Card 6  Avg Discount      15.62%   ▼ 0.2%  2014→2017
+
+Color rules locked:
+  Growth ≥ 0 → #22C55E (Green) | Growth < 0 → #EF4444 (Red)
+  Discount ↓ → Green (good)    | Discount ↑ → Red (risk)
+  No prior year → #64748B (Slate) + “No prior year”
+
+3. SMART GROWTH DAX MEASURES (Core Engine)
+------------------------------------------
+Created / fixed:
+  • Sales Growth Smart
+  • Profit Growth Smart
+  • Orders Growth Smart
+  • AOV Growth Smart          ← BUG FIX (was wrongly using Sales LY)
+  • Profit Margin KPI Subtitle (First vs Last, not blended SAMEPERIODLASTYEAR)
+  • Avg Discount KPI Subtitle (reverse color logic)
+
+Logic:
+  - Multi-year (All)     → Last Year vs First Year cumulative growth
+  - Single year (2015+)  → classic YoY via SAMEPERIODLASTYEAR
+  - Baseline (2014)      → BLANK / “No prior year”
+  - HASONEVALUE guards removed in favor of MinY/MaxY pattern
+
+Verified numbers (All):
+  Sales  2014 $484.25K → 2017 $733.22K = +51.41%
+  Profit 2014 $49.54K  → 2017 $93.44K  = +88.60%
+  Orders 2014 969      → 2017 1,687    = +74.1%
+  AOV    2014 $499.74  → 2017 $434.63  = -13.0%   (Orders grew faster than Sales)
+  Margin 2014 10.23%   → 2017 12.74%   = +2.5%
+  Disc   2014 15.83%   → 2017 ~15.6%   = -0.2%
+
+4. INSIGHT BANNER (Simple Final Version)
+-----------------------------------------
+Kept single-line clean glass strip (no multi-color split — user decision for simplicity).
+
+Dynamic measure drives:
+  “Sales +51.41% and Profit +88.60% (2014 → 2017) — yet discounts above 20% still lost $135,376 in profit”
+
+States:
+  All    → full period growth + $135,376
+  2014   → n/a + baseline loss $28,044
+  2015   → -2.83% / +24.37% + $28,405
+  2017   → +20.36% / +14.24% + $47,570
+
+5. CUSTOM REPORT-PAGE TOOLTIPS (All 6 KPI Cards)
+------------------------------------------------
+Pages created (all Hidden + Allow as tooltip = ON, Tooltip canvas size):
+
+  TP_Growth_KPI          → shared by Total Sales, Total Profit, Total Orders
+  TP_AOV_Explainer       → Avg Order Value (explains why AOV drops while Sales rise)
+  TP_Discount_Explainer  → Avg Discount (reverse color logic + target ≤15%)
+  TP_Margin_Explainer    → Profit Margin % (Healthy / Acceptable / Critical bands)
+
+All tooltips:
+  • Fully slicer-aware (Year / Region / Category filter inherit)
+  • Dynamic titles with explicit years (“2015 vs 2014”, “2014→2017”)
+  • Dynamic explanation sentences generated by DAX
+  • Dark navy glass styling matching theme
+
+6. RECONCILIATION MATRIX (Page 1 Locked)
+-----------------------------------------
+Year = All
+  Sales $2,297,200.86 | Profit $286,397.02 | Margin 12.47% | Orders 5,009
+  Customers 793 | Lines 9,994 | Products 1,862 | States 49
+  Banner loss $135,376 | Top 5 sum $153,385.74 — ALL MATCH SQL ✅
+
+Year = 2014 (baseline)
+  All growth subtitles = “No prior year” | Loss ~$28K ✅
+
+Year = 2017
+  YoY Sales +20.4% | Profit +14.2% | Orders +28.3% | Margin -0.7% ✅
+
+================================================================================
+DESIGN / UX DECISIONS (Day 6)
+================================================================================
+D6. Combined KPI > separate Growth cards (cleaner, less NA confusion).
+D7. Smart MinY/MaxY growth > pure SAMEPERIODLASTYEAR for multi-year views.
+D8. AOV drop is a FEATURE not a bug — tooltip explains “Orders grew faster than Sales”.
+D9. Discount color inverted (↓ Green, ↑ Red) — correct business logic.
+D10. Insight Banner stays simple single-color text (readability > rainbow).
+D11. Every KPI card gets a dedicated/shared tooltip — consulting-grade interactivity.
+D12. Page 1 frozen; no more visual changes unless bug found.
+
+================================================================================
+FILES / MEASURES ADDED TODAY
+================================================================================
+Measures (in _Measures):
+  Sales Growth Smart, Profit Growth Smart, Orders Growth Smart
+  AOV Growth Smart, AOV KPI Subtitle, AOV Subtitle Color
+  Profit Margin KPI Subtitle, Profit Margin Subtitle Color
+  Avg Discount KPI Subtitle, Avg Discount KPI Subtitle Color
+  TP_Growth_Title, TP_Growth_Footnote
+  TP_AOV_Dynamic_Title, TP_AOV_Dynamic_Explanation
+  TP_Discount_Title, TP_Discount_Status, TP_Discount_Status_Color, TP_Discount_Explanation
+  TP_Margin_Title, TP_Margin_Status, TP_Margin_Status_Color, TP_Margin_Dynamic_Explanation
+  Banner / Insight text measures (final simple version)
+
+Tooltip pages:
+  TP_Growth_KPI | TP_AOV_Explainer | TP_Discount_Explainer | TP_Margin_Explainer
+
+================================================================================
+PENDING (Carry to Day 7)
+================================================================================
+P1. Page 2 Products & Discounts visuals
+      - Sub-Category Profit horizontal bar (Green/Red conditional)
+      - Disc_Band Matrix heatmap + Margin % by band column chart
+      - >20% Discount Loss callout zone (-$135,376 / 1,393 lines / ~47% wipeout)
+P2. Page 3 Regions (Shape Map USA, Bottom 10 States, Region×Category matrix)
+P3. Page 4 Customers
+P4. Sync slicers across all pages + left-rail navigation buttons
+P5. Final QA screenshots + README / GitHub update
+
+================================================================================
+STATUS END OF DAY 6
+================================================================================
+Page 0 Cover          : DONE (from Day 5)
+Page 1 Overview       : DONE + LOCKED ✅
+Page 2 Products       : Background ready, visuals = NEXT
+Page 3 Regions        : Background ready
+Page 4 Customers      : Background ready
+Tooltips (Page 1)     : 4 pages, 6 cards covered ✅
+Model / DAX           : Stable, cent-to-cent reconciled ✅
+
+Next session: Start Page 2 — Sub-Category Profit Bar Chart (hero visual).
+================================================================================
+
+================================================================================
+DAY 7 (7 Nov 2026) — PAGE 1 LOCKOUT + DYNAMIC BANNER DAX + LINKEDIN LAUNCH
+================================================================================
+
+GOAL
+----
+Page 1 (Executive Overview) ko 100% complete & lock karna, dynamic storytelling DAX ko polish karna, aur portfolio rollout ke liye LinkedIn teaser campaign publish karna.
+
+================================================================================
+WHAT WE BUILT TODAY
+================================================================================
+
+1. DYNAMIC INSIGHT BANNER REFACTOR (DAX Engine Upgrade)
+-------------------------------------------------------
+Refactored `Overview Insight Banner Text` using SWITCH(TRUE()) pattern to deliver dynamic storytelling based on filter states:
+  • Sales ↓ & Profit ↑ → "💡 Smart Trade-off: Lower discounts helped us make MORE profit even with lower sales!"
+  • Sales ↑ & Profit ↓ → "⚠️ Margin Alert: We sold more, but heavy discounts ate into our profits."
+  • Sales ↑ & Profit ↑ → "🚀 Winning Streak: Both sales and profits are growing. Excellent!"
+  • Sales ↓ & Profit ↓ → "📉 Needs Attention: Both sales and profits are down. Time to review our strategy."
+  • 2014 Baseline     → "ℹ️ Not enough historical data to compare performance."
+
+Removed out-of-context Discount Loss figure from Page 1 Banner to reserve for Page 2 deep-dive.
+
+2. PAGE 1 OVERVIEW — FINAL LOCK & RECONCILIATION SIGN-OFF
+--------------------------------------------------------
+- Visual layout, SVG dark glass background, and dynamic KPI cards frozen (10/10 rating).
+- Slicer responsiveness re-tested across Year (2014-2017), Region, Category, Segment, Ship_Mode.
+- Checked 4 custom tooltips (Growth, AOV, Discount, Margin) — all working seamlessly.
+- Re-verified baseline numbers against SQL Express (`v_superstore`):
+  Sales $2,297,200.86 | Profit $286,397.02 | Orders 5,009 | Margin 12.47% ✅
+
+3. LINKEDIN PORTFOLIO TEASER CAMPAIGN (Video + Post)
+---------------------------------------------------
+- Scripted, recorded, and published an 80-second teaser video.
+- Highlighted the "PowerPoint SVG Background Trick" (visual contrast before vs after turning background on/off).
+- Showcased DAX dynamic banner updates, custom tooltips, and SQL cent-to-cent data integrity.
+- Published executive caption with role availability tags + pinned 1st community comment for engagement.
+
+================================================================================
+DESIGN / UX DECISIONS (Day 7)
+================================================================================
+D13. Insight Banner focuses purely on Sales vs Profit efficiency (trade-off vs margin erosion).
+D14. Discount loss narrative (-$135,376) reserved exclusively for Page 2 (Products & Discounts).
+D15. Page 1 completely locked — zero visual/DAX modifications unless critical bug found.
+
+================================================================================
+FILES / MEASURES ADDED/UPDATED TODAY
+================================================================================
+Updated Measures (in _Measures):
+  • Overview Insight Banner Text (Dynamic SWITCH logic with plain-English insights)
+
+Documentation & Assets:
+  • 80-Second Video Script & Recording (Cover Page → Overview → SVG On/Off Demo)
+  • Executive LinkedIn Caption & Pinned Comment Blueprint
+
+================================================================================
+PENDING (Carry to Day 8)
+================================================================================
+P1. Page 2 Products & Discounts Visuals:
+      - V1: Sub-Category Profit Horizontal Bar Chart (Copiers top green, Tables bottom red)
+      - V2: Disc_Band Matrix Heatmap (Sales, Profit, Profit Margin %)
+      - V3: Margin % Decay by Disc_Band Column Chart
+      - V4: Discount Risk Callout Zone (-$135,376 loss / 1,393 lines / ~47% wipeout)
+P2. Page 3 Regions (Shape Map USA, Bottom 10 States, Region×Category matrix)
+P3. Page 4 Customer Intelligence
+P4. Sync slicers across all pages + Left-rail navigation button wiring
+P5. GitHub README update & repository release
+
+================================================================================
+STATUS END OF DAY 7
+================================================================================
+Page 0 Cover          : DONE ✅
+Page 1 Overview       : DONE + LOCKED ✅ (10/10)
+LinkedIn Video Post   : LIVE & PINNED ✅
+Page 2 Products       : Background ready, Visual V1 = NEXT (Tomorrow)
+Page 3 Regions        : Background ready
+Page 4 Customers      : Background ready
+Model / DAX           : Stable & Reconciled ✅
+
+Next session: Start Page 2 — V1 Sub-Category Profit Horizontal Bar Chart.
+================================================================================
+
+================================================================================
+DAY 8 (8 Nov 2026) — PAGE 2 COMPLETE LOCKOUT + DISCOUNT LEAKAGE ENGINE
+================================================================================
+
+GOAL
+----
+Page 2 (Profit Leakage & Products) ko 100% build, reconcile, test aur lock karna.
+Core narrative: “Discounts above 20% destroy nearly half of total profit.”
+
+================================================================================
+WHAT WE BUILT TODAY
+================================================================================
+
+1. TOP KPI STRIP + DYNAMIC BANNER (Page 2)
+-----------------------------------------
+- 6 KPI Cards live:
+  • Avg Discount | Profit Margin % | Loss Line Count
+  • Lines Above 20% | Profit Above 20% | % Profit Wiped
+- Risk KPIs coloured Red/Amber with contextual subtitles.
+- New dynamic measure `Page 2 Banner Text` created with 3-state logic:
+  • Baseline 2014 → 📌 Baseline Year message
+  • Single Year (2015-17) → ⚠️ Discount Alert (Year)
+  • All / Multi-year → 🚨 Overall Impact (2014 → 2017)
+- Default All-years banner: 1393 orders wiped $135,376 (47.3%) of total profit.
+
+2. CUSTOM REPORT-PAGE TOOLTIPS (Page 2)
+---------------------------------------
+- TP_Loss_Lines → shared by Loss Line Count + Lines Above 20%
+- TP_Profit_Destruction → shared by Profit Above 20% + % Profit Wiped
+- Both tooltips fully filter-aware (All / 2014 / 2015 / 2016 / 2017 tested).
+
+3. CORE VISUALS (B1 → B4)
+-------------------------
+B1. Profit by Sub-Category (Horizontal Bar)
+    - Sorted Ascending (loss-makers on top)
+    - Conditional colour: Green ≥0 / Red <0
+    - 17 sub-categories, no scrollbar, Tables –$17.7K top
+
+B2. Discount Band Profit Leakage Heatmap (Matrix)
+    - Rows: Sub_Category | Columns: Disc_Band (0% / 1-20% / 21-40% / >40%)
+    - Values: Total Profit + Grand Totals
+    - Conditional Red/Green cell background (Values and totals)
+    - Sorted Ascending to match B1 | Grand Total $286.4K matched
+
+B3. Profit Margin Decay by Discount Band (Column Chart)
+    - X-axis: Disc_Band | Y-axis: Profit Margin %
+    - 3-tier colour: Green ≥12% | Amber 0-12% | Red <0%
+    - Curve: 29.51% → 11.91% → –15.30% → –77.40%
+
+B4. Bottom 5 Loss-Making Products (Table)
+    - Top N filter = Bottom 5 by Total Profit
+    - Columns: Product_ID, Total Sales, Total Profit, Avg Discount
+    - Cent-to-cent verified against SQL Server (SSMS)
+
+4. FULL FILTER & RECONCILIATION STRESS TEST
+------------------------------------------
+Tested all 5 contexts (All, 2014, 2015, 2016, 2017):
+- Banner text, KPIs, Heatmap totals, Margin curve, Bottom 5 products
+- Every number reconciled with SQL `v_superstore`
+- No hardcoded values, no visual bugs, no sorting issues
+
+================================================================================
+DESIGN / UX DECISIONS (Day 8)
+================================================================================
+D16. Page 2 KPIs completely different from Page 1 (Risk-focused, not Growth-focused).
+D17. Loss-makers deliberately sorted to TOP (Ascending) for instant executive spotting.
+D18. Heatmap + Bar Chart row order kept identical for horizontal eye-tracking.
+D19. Discount narrative (+ tooltips) permanently moved to Page 2 only.
+D20. Page 2 locked — zero changes unless critical data bug found.
+
+================================================================================
+FILES / MEASURES ADDED/UPDATED TODAY
+================================================================================
+New / Updated Measures (in _Measures):
+  • Page 2 Banner Text (3-state dynamic logic)
+  • TP_Loss_Lines_Title + TP_Loss_Lines_Explanation
+  • TP_Profit_Destruction_Title + TP_Profit_Destruction_Explanation
+  • (Existing) Lines Above 20% | Profit Above 20% | Loss Share of Total Profit | Loss Line Count
+
+Visuals Finalised:
+  • B1 Horizontal Bar | B2 Matrix Heatmap | B3 Column Chart | B4 Bottom 5 Table
+
+================================================================================
+PENDING (Carry to Day 9)
+================================================================================
+P1. Page 3 Regions & Geography:
+      - USA Shape Map
+      - Bottom 10 Loss-Making States
+      - Region × Category Matrix
+      - Loss-Making States + Loss $ KPIs
+P2. Page 4 Customer Intelligence
+P3. Sync all slicers across pages + Left-rail navigation wiring
+P4. Final GitHub README + asset upload
+P5. Full project walkthrough video / LinkedIn final post
+
+================================================================================
+STATUS END OF DAY 8
+================================================================================
+Page 0 Cover          : DONE + FINAL ✅
+Page 1 Overview       : DONE + LOCKED ✅
+Page 2 Products       : DONE + LOCKED ✅ (10/10)
+LinkedIn Teaser       : LIVE ✅
+Page 3 Regions        : Background ready → NEXT
+Page 4 Customers      : Background ready
+Model / DAX / SQL     : Stable & Cent-to-Cent Reconciled ✅
+
+Next session: Start Page 3 — Regions & Geography (Shape Map + Loss States).
+================================================================================
+
+================================================================================
+DAY 9 (16 Nov 2026) — Page 3 — Regions & Geography (FULL BUILD + LOCK)
+================================================================================
+
+✅ PAGE 3 STATUS: DONE + LOCKED + 11/10 POLISHED
+
+--------------------------------------------------------------------------------
+1. TOP 6 KPI STRIP (Completed & Verified)
+--------------------------------------------------------------------------------
+• Reused 4 cards from Page 1 (Total Sales, Total Profit, Profit Margin %, Avg Discount)
+• Added 2 new geography KPIs:
+    – Loss-Making States          = 10 (All Years)
+    – Loss in Loss-Making States  = −$98.25K (All Years)
+• Created 4 new DAX measures:
+    – Loss States Subtitle / Loss States Color
+    – Loss Impact Subtitle / Loss Impact Color
+• Reverse color logic (↑ loss = Red, ↓ loss = Green)
+• “vs YYYY” prior-year labels (e.g. 2017 → “vs 2016”)
+• Baseline 2014 correctly shows “No prior year” in Grey (#94A3B8)
+• Cent-to-cent SSMS reconciliation across All / 2014 / 2015 / 2016 / 2017
+
+--------------------------------------------------------------------------------
+2. DYNAMIC 3-STATE BANNER (Completed)
+--------------------------------------------------------------------------------
+• Measure: Page 3 Banner Text
+• States:
+    📌 Baseline Year (2014) → 8 states, −$19,538, led by Texas (−$9,135)
+    ⚠️ Geographic Risk (single year)
+    🚨 Geographic Profit Leakage (All / multi-year) → 10 states erased $98,247
+• Auto-detects worst state via TOPN on Total Profit
+
+--------------------------------------------------------------------------------
+3. VISUALS BUILT & RECONCILED
+--------------------------------------------------------------------------------
+C1 — USA Shape Map (Profit & Loss Map by State)
+    • Red → Navy (Middle=0) → Green gradient
+    • Blank areas (Alaska/Hawaii) blended to dark navy
+    • Title: Profit & Loss Map by State
+
+C2 — Top 10 Loss-Making States (Bar)
+    • Bottom 10 by Total Profit + strict filter Total Profit < 0
+    • Texas −$25.73K | Ohio −$16.97K | PA −$15.56K | Illinois −$12.61K
+    • No scrollbar, data labels outside end
+
+C3 — Top 10 States by Profit (Bar)
+    • California +$76.38K | New York +$74.04K | Washington +$33.40K
+
+C4 — Regional Profit Matrix by Category (Heatmap)
+    • Rows = Region | Columns = Category | Values = Total Profit
+    • Central Furniture = −$2.87K (only red cell)
+    • Grand Total = $286,397.02 (exact SQL match)
+    • 2014 Grand Total = $49,543.97 (exact SQL match)
+
+C5 — Regional Performance Table
+    • Region | Total Sales ($K) | Total Profit ($K) | PM %
+    • West 14.94% → East 13.48% → South 11.93% → Central 7.92%
+    • Total row: $2,297.20K | $286.40K | 12.47%
+
+--------------------------------------------------------------------------------
+4. CUSTOM TOOLTIP — TP_State_Map (11/10 Polish)
+--------------------------------------------------------------------------------
+• New hidden tooltip page (320 × 280 px)
+• Header: State name
+• 4 live metrics: Total Sales | Total Profit | Profit Margin % | Avg Discount
+• Semantic colors on Profit & Margin (Red < 0, Green ≥ 0)
+• Dynamic explainer measure: TP_State_Explainer
+    – 🚨 Profit Bleeder path (Texas example)
+    – 🚀 Champion State path (California example, margin ≥ 15%)
+    – ⚠️ Moderate State path
+• Actionable next-step line on every hover
+• Bound only to C1 Shape Map
+
+--------------------------------------------------------------------------------
+5. SQL VERIFICATION (SSMS)
+--------------------------------------------------------------------------------
+Query results locked into project context:
+• All Years : 10 loss states | −$98,246.74
+• 2014      : 8 loss states  | −$19,538.09  (Texas −$9,135.01 top bleeder)
+• 2015      : 9 loss states  | −$19,111.12
+• 2016      : 9 loss states  | −$23,911.90
+• 2017      : 9 loss states  | −$36,915.19
+All Power BI KPI + visual numbers matched cent-to-cent.
+
+--------------------------------------------------------------------------------
+6. RULES & DESIGN COMPLIANCE
+--------------------------------------------------------------------------------
+• R1 Zero hardcoded numbers     ✅
+• R2 Cent-to-cent reconciliation ✅
+• R3 Lean executive design      ✅
+• R5 Semantic color discipline  ✅
+• R6 Reconcile first, polish second ✅
+• R7 Pages 0–2 untouched        ✅
+• Dark navy glassmorphism + SVG backgrounds preserved
+• Synced filter bar + left nav rail working across page
+
+--------------------------------------------------------------------------------
+7. OUTSTANDING / NEXT
+--------------------------------------------------------------------------------
+• Page 3 README section          → READY (paste today)
+• Page 3 screenshots             → Capture All + 2014 + tooltips
+• LinkedIn Page 3 carousel post  → Pending
+• Page 4 — Customer Intelligence → NEXT BUILD (Day 10)
+
+================================================================================
+END OF DAY 9 LOG — 16 Nov 2026
+Page 3 Regions & Geography = DONE + LOCKED + TOOLTIP POLISHED
+================================================================================
+
+================================================================================
+Day 10 (17 Nov 2026) — Customer & Shipping Intelligence (Page 4 Complete)
+================================================================================
+- **Status:** Page 4 Built, 100% SQL Reconciled, and Frozen ✅
+- **SQL Source:** `v_superstore` via SQLEXPRESS (`SuperstoreDB`)
+- **Key Milestones Achieved:**
+  1. **SSMS Baseline Verification (R5–R8 Queries):**
+     - Verified baseline KPIs: 793 unique customers, 5,009 orders, 6.32 orders/cust, $458.61 AOV, $57.18 PPO, 3.96 avg ship days.
+     - Extracted Shipping Mode breakdown, Segment performance, and Top/Bottom Customer benchmarks.
+  2. **Top 6 KPI Cards Strip:**
+     - Created 6 dynamic subtitle measures (`Sub_Customers_Text/Color`, `Sub_OrdersPerCust_Text/Color`, `Sub_AOV_Text/Color`, `Sub_PPO_Text/Color`, `Sub_ShipDays_Text/Color`).
+     - Implemented reverse-color logic for `Avg Ship Days` (YoY decrease in days = positive/green).
+     - Applied `FORMAT(ABS(YoY), "0.0%")` to remove duplicate negative signs.
+  3. **Executive Custom Tooltips Setup:**
+     - `TP_Avg_Ship_Days`: Mini horizontal bar chart showing speed across all 4 modes with dynamic explainer text.
+     - `TP_Total_Customers`: Implemented **Disconnected Dimension Pattern** (`Dim_Year_Tooltip`) to maintain 4-year trajectory context during single-year slicer selections with dynamic highlight logic (#00D4FF for active year, #334155 for inactive).
+  4. **Core Visuals Build & Formatting:**
+     - **Visual A1 (Table):** Shipping Mode Performance with Data Bars on Avg Ship Days and margin highlighting.
+     - **Visual A2 (Clustered Column):** Sales vs Profit dynamics by customer segment.
+     - **Visual A3 (Donut Chart):** Order distribution by shipping mode (5,009 total orders center card).
+     - **Visual A4 & A5 (Tables):** Top 5 Sales vs Bottom 5 Profit customer leaderboards exposing the Sean Miller loss paradox.
+  5. **Dynamic Storytelling Header:**
+     - Added `Page 4 Banner Text` DAX measure with 3-tier IF/RETURN logic for multi-year, single-year, and baseline contexts.
+- **Model / DAX Additions:**
+  - `Total Customers`, `Orders per Customer`, `Cust_Trend_Tooltip`, `Cust_Trend_Bar_Color`, `TP_Customers_Explainer`, `TP_ShipDays_Explainer`, `Page 4 Banner Text`.
+  - Disconnected table: `Dim_Year_Tooltip`.
+- **Project Progress:** Pages 0, 1, 2, 3, and 4 are now 100% complete and frozen.
+- **Next Up:** Day 11 — Page 5 (Product & Inventory Intelligence / Returns Analysis).
+
+================================================================================
+DAY 11 (18 Nov 2026): PAGE 5 — PRODUCT PORTFOLIO & PROFITABILITY DEEP-DIVE
+================================================================================
+
+1. BUSINESS CONTEXT & OBJECTIVE
+Page 5 delivers an executive audit of the master product catalog (1,862 active SKUs across 4 years), exposing silent profit killers, deep-discount margin destruction, sub-category health, and star margin drivers.
+
+2. SQL SOURCE RECONCILIATION & BENCHMARKS (QUERIES R9–R12)
+Database: SuperstoreDB | Source View: dbo.v_superstore
+• Total Products (Master Catalog)    : 1,862 Unique SKUs
+• Total Units Sold                   : 37,873 Units
+• Realized Avg Price / Unit          : $60.66 ($2,297,200.86 / 37,873)
+• Realized Profit / Unit             : $7.56 ($286,397.02 / 37,873)
+• Loss-Making Products Count         : 300 Products (Net Profit < $0)
+• Total Product Loss Bleed           : -$76,721.13 (Cumulative negative profit)
+• Sub-Category Bleed Leaders         : Tables (-$17,725.48 | 26.13% Avg Disc)
+                                       Bookcases (-$3,472.56 | 21.11% Avg Disc)
+                                       Supplies (-$1,189.10 | -2.55% Margin)
+• Category Margin Paradox            : Furniture ($742.0K Sales | $18.45K Profit | 2.49% Margin)
+• Top Star Margin Product            : Canon imageCLASS 2200 Advanced Copier (+$25,199.93 Profit)
+• Worst Profit Killer Product        : Cubify CubeX 3D Printer Double Head Print (-$8,879.97 Net Loss)
+
+3. DAX ENGINE & ARCHITECTURE IMPLEMENTED
+• Core Metrics:
+  - [Total Products], [Total Units Sold], [Avg Price Per Unit], [Profit Per Unit], [Loss Products Count], [Product Loss Bleed]
+• 3-Tier Contextual Subtitles & Semantic Color Logic:
+  - Dynamic comparison across Baseline (2014), Single-Year YoY (▲/▼), and Multi-Year span (2014→2017).
+  - Reverse semantic color logic strictly applied on [Loss Products Count] and [Product Loss Bleed] (Increases = #EF4444 Red, Decreases = #22C55E Green).
+• Executive Dynamic Banner:
+  - [Page 5 Banner Text] with auto-truncation for long product names and compact $K notation.
+• Dynamic Tooltip Explainer Suite:
+  - [TP_Units_Explainer] for volume trajectory narrative.
+  - [TP_Loss_Explainer] for root-cause profit drain audit.
+
+4. DYNAMIC TOOLTIPS BUILT
+• Tooltip 1: TP_Units_Sold (Assigned to Card 2)
+  - Custom canvas (320x280) with dark navy glassmorphism.
+  - Category Volume Split bar chart (Office Supplies 22.9K, Furniture 8.0K, Tech 6.9K).
+  - Disconnected 4-Year historical trend column chart via Dim_Year_Tooltip helper table.
+  - Dynamic contextual narrative explainer card.
+• Tooltip 2: TP_Loss_Bleed (Assigned to Card 6)
+  - Custom canvas (320x290) with toxic red aesthetic.
+  - Negative Sub-Categories bar chart (Tables, Bookcases, Supplies).
+  - Bottom 3 Toxic Products mini table with Totals disabled.
+  - Dynamic loss escalation explainer card.
+
+5. VISUAL LAYOUT & GRID IMPLEMENTATION (GRID A)
+• Visual P1 (Left Column): Sub-Category Profitability Matrix (Table)
+  - Columns: Sub_Category, Total Units Sold (Cyan Data Bars #00D4FF), Avg Discount %, Total Sales, Total Profit (Conditional Font #22C55E/#EF4444), Profit Margin %.
+• Visual P2 (Top Mid): Category Sales vs Margin Growth (Combo Chart)
+  - Clustered column for Total Sales ($K) with Line for Profit Margin % (Green marker >10%, Red marker <10%).
+• Visual P3 (Top Right): Total Units Sold by Category (Donut Chart)
+  - Visual donut with total volume callout (37,873) in center hole.
+• Visual P4 (Bottom Mid): Top 5 Star Products (Table)
+  - Clean table sorted by Profit Descending, led by Canon Copier (+$25.20K).
+• Visual P5 (Bottom Right): Bottom 5 Profit Killers (Table)
+  - Clean table sorted by Profit Ascending, led by Cubify 3D (-$8.88K).
+
+6. TECHNICAL AUDIT & ISSUE RESOLUTION
+• Issue: Truncated calculated column for product names caused distinct SKUs with similar prefixes (e.g., Cubify Double Head vs Triple Head) to group together, creating SQL reconciliation mismatch.
+• Fix: Reverted to native Dim_Product[Product_Name], disabled Text Wrap across values/headers, and leveraged visual column resizing for clean auto-ellipsis truncation. Resulted in 100% cent-to-cent match with SQL Query R12.
+
+================================================================================
+FINAL STATUS: ALL PAGES (0, 1, 2, 3, 4, 5) COMPLETED & LOCKED ✅
+================================================================================
+
+================================================================================
+DAY 12 (19 Nov 2026): PAGE 6 — STRATEGIC SIMULATION & PREDICTIVE STUDIO
+================================================================================
+1. BUSINESS CONTEXT & OBJECTIVE
+Page 6 transforms historical diagnostic intelligence into Prescriptive and Predictive Decision Support. It empowers executive leadership to model margin recovery via dynamic Discount Governance and Price Optimization, visualizes a custom Waterfall P&L bridge, and provides a 12-Month Holt-Winters predictive revenue runway for 2018.
+
+2. SQL SOURCE RECONCILIATION & BENCHMARKS (SuperstoreDB)
+Database: SuperstoreDB | Source View: dbo.v_superstore | Verified via SSMS
+• Baseline Total Sales               : $2,297,200.86
+• Baseline Total Profit              : $286,397.02 (12.47% Net Margin)
+• Baseline Average Discount          : 15.62%
+• Eligible Discounted Sales Pool     : $1,209,300.00 (Orders where Discount > 0)
+• Balanced Scenario Audit (-2% Disc, +1% Price):
+  - Simulated Discount Savings       : +$24,186.00 ($1,209,300 * 0.02)
+  - Simulated Price Revenue          : +$22,972.01 ($2,297,200.86 * 0.01)
+  - Total Net Profit Uplift          : +$47,158.01 ($24,186.00 + $22,972.01)
+  - Target Simulated Profit          : $333,555.03 ($286,397.02 + $47,158.01)
+  - Simulated Sales Denominator      : $2,344,358.87 ($2,297,200.86 + $47,158.01)
+  - Target Simulated Margin %        : 14.23% (Expands +1.76% from 12.47% Base)
+  - Target Average Discount %        : 13.62% (▼ -2.00% vs 15.6% Base)
+
+3. WHAT-IF DAX ENGINE & ARCHITECTURE IMPLEMENTED
+• Numeric Range Parameters:
+  - [Discount Adjustment] : 0.00% to 10.00% (Increment: 0.5% / 1.0%, Default: 0.0%)
+  - [Price Adjustment]    : 0.00% to 10.00% (Increment: 0.5% / 1.0%, Default: 0.0%)
+• Core Scenario Measures:
+  - [Simulated Discount Savings] : Calculates recovered margin strictly on [Discount] > 0 sales.
+  - [Simulated Price Revenue]    : 100% margin pass-through calculation across total sales volume.
+  - [Simulated Profit]           : [Total Profit] + [Simulated Discount Savings] + [Simulated Price Revenue]
+  - [Simulated Profit Uplift]    : [Simulated Profit] - [Total Profit]
+  - [Simulated Avg Disc %]       : MAX(0, [Avg Discount] - Selected Disc Reduction)
+  - [Simulated Margin %]         : DIVIDE([Simulated Profit], [Base Sales] + [Savings] + [Price Revenue], 0)
+• Subtitle & Formatting Logic:
+  - [Sub_Simulated_Profit]       : Dynamic comparison vs Baseline ("▲ +16.5% vs Baseline" / "Historical Actuals")
+  - [Sub_Simulated_Discount]     : Policy cap spread ("▼ -2.00% vs Base (15.6%)")
+  - [Sub_Simulated_Margin]       : Net margin expansion spread ("▲ +1.8% vs Base (12.5%)")
+• Executive Dynamic Banner:
+  - [Page 6 Banner Text] dynamically synthesizes discount reduction %, price hike %, dollar cash restored, and margin spread.
+
+4. DISCONNECTED WATERFALL BRIDGE TABLE PATTERN
+• Created disconnected DATATABLE 'Waterfall_Bridge' (Step_Order, Step_Name):
+  - Step 1: Baseline Profit (Order 1)
+  - Step 2: Discount Savings (Order 2)
+  - Step 3: Price Gains (Order 3)
+  - Step 4: Target Profit (Order 4)
+• Sorted [Step_Name] by [Step_Order] in Data View.
+• Single Driver Measure: [Waterfall_Value] dynamically routes values using SWITCH(SELECTEDVALUE()).
+• Native Waterfall formatting: Disabled duplicate native "Show total column", allowing Step 4 to seamlessly render as "Total / Target Profit".
+
+5. VISUAL LAYOUT & GRID ARCHITECTURE
+• Top Control Deck: Region Slicer, Category Slicer, Reset to Baseline Button (Bookmark: Reset_Page6_Baseline).
+• Scenario KPI Strip (6 Cards, ~90px Height):
+  1. Baseline Profit ($286.40K) [#94A3B8 Slate]
+  2. Simulated Discount Savings (+$24.19K) [#22C55E Green]
+  3. Simulated Price Revenue (+$22.97K) [#22C55E Green]
+  4. Simulated Profit ($333.55K) [#22C55E Green]
+  5. Simulated Avg Disc % (13.62%) [#00D4FF Cyan]
+  6. Simulated Margin % (14.23%) [#00D4FF Cyan]
+• Zone 1 (Left Panel ~42% Width): Profit Restoration Bridge (Waterfall Chart) showing baseline-to-target P&L bridge.
+• Zone 2 (Right Panel ~58% Width): 2018 Forward Runway & Predictive Forecast (Line Chart).
+  - Monthly continuous timeline (2014-2017 historical actuals + 2018 12-month projection).
+  - Holt-Winters Additive Seasonality (Seasonality: 12, 95% Confidence Band cone).
+
+6. TECHNICAL AUDIT & FINANCIAL SANITY RESOLUTION
+• Issue 1: Initial formula computed discount savings over entire gross sales ($2.30M) including zero-discount orders, leading to algebraic denominator cancellation (exact 1:1 margin jumps).
+• Fix 1: Filtered calculation pool strictly to `v_superstore[Discount] > 0` ($1.21M pool) and added price/discount cash to the Simulated Sales denominator.
+• Issue 2: Decimal scale mismatch (0.01 vs 1.00) in parameter values caused 10x deviation in savings ($12K vs $121K).
+• Fix 2: Implemented bulletproof DAX scaling checks (`IF(ABS(RawVal) > 1, RawVal / 100, RawVal)`), achieving 100.0% cent-to-cent reconciliation with SSMS validation scripts.
+• Issue 3: Screen space constraint for standalone AI Key Influencers visual.
+• Decision: Preserved lean visual elegance (Rule R3) by prioritizing the 12-Month Holt-Winters Predictive ML line chart, preventing cramped visual clutter.
+
+================================================================================
+FINAL MASTER SUITE STATUS: ALL PAGES (0, 1, 2, 3, 4, 5, 6) COMPLETED & LOCKED ✅
+PORTFOLIO SUITE 100% PRODUCTION READY & SQL RECONCILED! 🚀🎉
+================================================================================
