@@ -76,7 +76,7 @@ The objective was to answer these questions using actual query results rather th
 | Microsoft PowerPoint         | Designed report backgrounds and page layouts                        |
 | SVG                          | Created sharp, scalable dashboard background elements               |
 | GitHub                       | Maintained project files and documented the complete workflow       |
-| Ai Partner                   | Claude, DeepSeek, Arena Ai                                          |
+| Ai Tools                  | Used for brainstorming and code review                                        |
 
 ### SQL Skills Used
 
@@ -741,6 +741,7 @@ This page highlights why customer revenue should always be viewed alongside cust
 **Main Insight:**
 
 Furniture generated approximately $742K in sales but contributed only $18.45K in profit, representing a margin of just 2.49%.
+This means for every $100 of furniture sold, the company kept only $2.49 as profit. This is where the discount policy is bleeding margin.
 
 Technology contributed approximately 50.79% of total company profit.
 
