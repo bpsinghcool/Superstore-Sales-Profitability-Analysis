@@ -123,6 +123,8 @@ The objective was to answer these questions using actual query results rather th
 
 **Source:** [Sample Superstore Dataset – Kaggle](https://www.kaggle.com/datasets/vivek468/superstore-dataset-final)
 
+![SS](screenshots/00_dataset_source.png)
+
 The dataset contains historical retail transactions covering four years, from January 2014 to December 2017.
 
 | Dataset Information | Value               |
@@ -172,21 +174,25 @@ I initially imported the CSV file into SQL Server using the Import Flat File wiz
 
 Instead of directly moving to SQL queries, I investigated these issues and verified the imported data against the original source.
 
-### Issue 1: NULL Value During Import
+### ⚠️ Issue 1: NULL Value During Import
 
 During the initial import, SQL Server returned:
 
 `Column 'Profit' does not allow DBNull.Value`
 
+![SS](screenshots/01_import_data_error_NULL_msg.png)
+
 I allowed NULL values in the Profit column and reran the import.
 
 However, the problem was not completely resolved.
 
-### Issue 2: A Valid Profit Value Was Lost During Import
+### ⚠️ Issue 2: A Valid Profit Value Was Lost During Import
 
 SQL Server displayed a warning:
 
 `Up to 1 cells of data may have been dropped ... Profit`
+
+![SS](screenshots/01_import_data_Warning_msg.png)
 
 On checking the imported records, I found:
 
@@ -209,11 +215,15 @@ WHERE Row_ID = 7345;
 
 The corrected value was verified.
 
+![SS](screenshots/02_data_checks_null_profit_row_7345.png) | ![SS](screenshots/02_data_checks_row_data_row_7345.png)
+
 **What I learned:** A successful import does not automatically mean that all source values have been imported correctly. Import warnings, row counts and financial control totals should always be checked.
 
-### Issue 3: Duplicate Records
+### ⚠️ Issue 3: Duplicate Records
 
 I identified eight repeated `Order_ID + Product_ID` combinations, involving 16 rows.
+
+![SS](screenshots/02_data_checks_duplicates_values.png) | ![SS](screenshots/02_data_checks_duplicates_impact.png)
 
 On investigation:
 
@@ -226,9 +236,11 @@ I retained the records as they appeared in the original source and documented th
 
 **What I learned:** A repeated key combination does not always mean that a record is incorrect. It is important to investigate the business meaning before removing data.
 
-### Issue 4: FLOAT Precision and Discount Comparisons
+### ⚠️ Issue 4: FLOAT Precision and Discount Comparisons
 
 This was particularly important because discount analysis was one of the main objectives of the project.
+
+![SS](screenshots/02_data_checks_floating_point_check.png)
 
 Initially, I executed:
 
@@ -266,6 +278,7 @@ Then changed the column type:
 ALTER TABLE superstore
 ALTER COLUMN Discount decimal(3,2) NOT NULL;
 ```
+![SS](screenshots/02_data_checks_float_to_decimal_fix.png) | ![SS](screenshots/02_data_checks_discount_proof.png) | ![SS](screenshots/02_data_checks_distinct_discount_check.png)
 
 **Verification results:**
 
@@ -281,54 +294,6 @@ ALTER COLUMN Discount decimal(3,2) NOT NULL;
 The original sales and profit control totals remained unchanged.
 
 **What I learned:** FLOAT is an approximate numeric data type. For percentages and exact threshold comparisons, DECIMAL is a better choice. For financial applications, monetary columns should also use an appropriate DECIMAL precision.
-
-### Issue 5: Duplicate Product and Location Keys
-
-While preparing the Power BI data model, I found that some source identifiers were not unique at the required dimension grain.
-
-**Product key issue:**
-
-- 1,894 Product ID and Product Name combinations.
-- 1,862 distinct Product IDs.
-- 32 Product IDs appeared with two different product names.
-
-Therefore, Product_ID alone could not be used as a unique dimension key.
-
-I created:
-
-```
-Product_Key =
-v_superstore[Product_ID]
-    & "|"
-    & v_superstore[Product_Name]
-```
-
-**Location key issue:**
-
-Postal_Code alone was also insufficient because one postal code was associated with two cities.
-
-I created:
-
-```
-Location_Key =
-v_superstore[Postal_Code]
-    & "-"
-    & v_superstore[City]
-```
-
-These composite keys were checked for uniqueness before creating relationships.
-
-### Issue 6: Year-End Date Mismatch
-
-I identified seven records where:
-
-- Order_Date was 31 December 2016.
-- Order_ID belonged to the 2017 series.
-- Shipping took place in January 2017.
-
-I retained the source values and used Order_Date as the reporting date.
-
-I did not derive the transaction year from Order_ID.
 
 ---
 
@@ -1122,6 +1087,17 @@ Superstore-Sales-Profitability-Analysis/
 ├── powerbi/
 │   └── Superstore_Sales_Intelligence_2026.pbix
 ├── screenshots/
+│   ├── 00_dataset_source.png
+│   ├── 01_import_data_error_NULL_msg.png
+│   ├── 01_import_data_Warning_msg.png
+│   ├── 02_data_checks_null_profit_row_7345.png
+│   ├── 02_data_checks_row_data_row_7345.png
+│   ├── 02_data_checks_duplicates_values.png
+│   ├── 02_data_checks_duplicates_impact.png
+│   ├── 02_data_checks_floating_point_check.png
+│   ├── 02_data_checks_float_to_decimal_fix.png
+│   ├── 02_data_checks_discount_proof.png
+│   ├── 02_data_checks_distinct_discount_check.png
 │   ├── 05_q01_category_margin.png
 │   ├── 05_q02_region_performance.png
 │   ├── 05_q03_monthly_trend.png
