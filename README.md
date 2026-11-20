@@ -1122,6 +1122,18 @@ Superstore-Sales-Profitability-Analysis/
 ├── powerbi/
 │   └── Superstore_Sales_Intelligence_2026.pbix
 ├── screenshots/
+│   ├── 05_q01_category_margin.png
+│   ├── 05_q02_region_performance.png
+│   ├── 05_q03_monthly_trend.png
+│   ├── 05_q03b_peak_and_drop_months.png
+│   ├── 05_q04_discount_impact.png
+│   ├── 05_q05_loss_subcategories.png
+│   ├── 05_q06_top_products.png
+│   ├── 05_q07_yoy_trend.png
+│   ├── 05_q08_discount_cost.png
+│   ├── 05_q09_bottom_states.png
+│   ├── 05_q10_subcat_discount_matrix.png
+│   ├── core_measures.png
 │   ├── 09_powerbi_datamodel.png
 │   ├── 00_cover_page.png
 │   ├── 01_executive_overview.png
