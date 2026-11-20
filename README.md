@@ -240,8 +240,6 @@ I retained the records as they appeared in the original source and documented th
 
 This was particularly important because discount analysis was one of the main objectives of the project.
 
-![SS](screenshots/02_data_checks_floating_point_check.png)
-
 Initially, I executed:
 
 ```
@@ -278,7 +276,7 @@ Then changed the column type:
 ALTER TABLE superstore
 ALTER COLUMN Discount decimal(3,2) NOT NULL;
 ```
-![SS](screenshots/02_data_checks_float_to_decimal_fix.png) | ![SS](screenshots/02_data_checks_discount_proof.png) | ![SS](screenshots/02_data_checks_distinct_discount_check.png)
+![SS](screenshots/02_data_checks_float_to_decimal_fix.png) | ![SS](screenshots/02_data_checks_distinct_discount_check.png)
 
 **Verification results:**
 
